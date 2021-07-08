@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">cabinet</string>
+    <string name="title_activity_main">MainActivity</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+    <string name="desc_exit">앱을 나가시려면 한 번 더 누르십시오</string>
+    <string name="permission_fail">권한이 없어 동작을 수행할 수 없습니다</string>
+</resources>
