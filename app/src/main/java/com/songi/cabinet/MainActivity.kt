@@ -1,27 +1,47 @@
 package com.songi.cabinet
 
+import android.app.AlertDialog
+import android.content.Context
+import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.AnimationDrawable
 import android.os.Bundle
+import android.util.AttributeSet
+import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
 import android.widget.*
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.developer.filepicker.model.DialogConfigs
-import com.developer.filepicker.model.DialogProperties
-import com.developer.filepicker.view.FilePickerDialog
+import androidx.appcompat.widget.SwitchCompat
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
-import java.io.File
 
 
 class MainActivity : AppCompatActivity() {
-    private var TAG = "MainActivity"
+    private val TAG = "MainActivity"
     private var backPressedTime: Long = 0
     private val PERMISSION_READ_EXTERNAL_STORAGE = 1249
     private val TIME_INTERVAL: Long = 2000
     private var fileManager: FileManager? = null
-    private var viewManager: ViewManager? = null
+    private lateinit var viewManager: ViewManager
 
     private var mBinding : ActivityMainBinding? = null
     private val binding get() = mBinding!!
+    private val requestResult: ActivityResultLauncher<Intent> = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data!!.also { uri ->
+                fileManager!!.importFile(uri)
+                viewManager.refreshView()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,20 +49,46 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         fileManager = FileManager(this)
-        viewManager = ViewManager(fileManager!!, this, binding.fileContainer)
-        viewManager!!.refreshView()
+        viewManager = ViewManager(fileManager!!, this, binding.fileContainer, binding.toolbar)
+        viewManager.refreshView()
 
-        binding.createFile.setOnClickListener {
-            fileManager!!.createFile()
-            viewManager!!.refreshView()
+        mBinding!!.toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.app_bar_search -> {}
+                R.id.app_bar_switch -> {}
+                R.id.app_bar_create_folder -> {
+                    val editText = EditText(this).apply {
+                        hint = getString(R.string.create_folder_hint)
+                    }
+                    val alertDialog = AlertDialog.Builder(this).apply {
+                        setTitle(R.string.create_folder_title)
+                        setView(editText)
+                        setPositiveButton(R.string.positive, DialogInterface.OnClickListener { dialog, which ->
+                            val folderName = editText.text.toString()
+                            fileManager!!.createFolder(folderName)
+                            viewManager.refreshView()
+                        })
+                        setNegativeButton(R.string.negative, DialogInterface.OnClickListener { dialog, which ->
+
+                        })
+                        show()
+                    }
+                }
+                R.id.app_bar_import -> checkPermission()
+                else -> {}
+            }
+            return@setOnMenuItemClickListener true
         }
-        binding.createFolder.setOnClickListener {
-            fileManager!!.createFolder()
-            viewManager!!.refreshView()
+
+        findViewById<Switch>(R.id.view_hidden_toggle).setOnCheckedChangeListener { buttonView, isChecked ->
+            viewManager.viewHidden = isChecked
+            viewManager.refreshView()
         }
-        binding.importFile.setOnClickListener {
-            checkPermission()
-        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewManager.refreshView()
     }
 
     private fun checkPermission() {
@@ -55,24 +101,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun importFile() {
-        var properties = DialogProperties()
-        properties.selection_mode = DialogConfigs.SINGLE_MODE;
-        properties.selection_type = DialogConfigs.FILE_SELECT;
-        properties.root = File("${DialogConfigs.DEFAULT_DIR}/sdcard");
-        properties.error_dir = File("${DialogConfigs.DEFAULT_DIR}/sdcard");
-        properties.offset = File("${DialogConfigs.DEFAULT_DIR}/sdcard");
-        properties.extensions = null;
-        properties.show_hidden_files = false;
-
-        val dialog = FilePickerDialog(this@MainActivity, properties)
-        dialog.setTitle("Select a File")
-        dialog.setDialogSelectionListener {
-            for (file in it) {
-                fileManager!!.saveFile(file)
-            }
-            viewManager!!.refreshView()
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
         }
-        dialog.show()
+        requestResult.launch(intent)
     }
 
     override fun onBackPressed() {
@@ -81,7 +114,12 @@ class MainActivity : AppCompatActivity() {
             super.onBackPressed()
         } else {
             if (isNotRoot) {
-                viewManager!!.refreshView()
+                viewManager.refreshView()
+                if (fileManager!!.isCurrentRoot()) {
+                    mBinding!!.toolbar.title = getString(R.string.app_name)
+                } else {
+                    mBinding!!.toolbar.title = fileManager!!.mCurrentFolder
+                }
             } else {
                 val currentTime = System.currentTimeMillis()
                 val intervalTime = currentTime - backPressedTime

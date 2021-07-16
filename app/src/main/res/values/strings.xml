@@ -1,9 +1,19 @@
 <resources>
-    <string name="app_name">cabinet</string>
-    <string name="title_activity_main">MainActivity</string>
-    <string name="title_home">Home</string>
-    <string name="title_dashboard">Dashboard</string>
-    <string name="title_notifications">Notifications</string>
-    <string name="desc_exit">앱을 나가시려면 한 번 더 누르십시오</string>
-    <string name="permission_fail">권한이 없어 동작을 수행할 수 없습니다</string>
+    <string name="app_name">Cabinet</string>
+    <string name="title_activity_main" translatable="false">MainActivity</string>
+    <string name="desc_exit">If you want to exit, please touch once again</string>
+    <string name="permission_fail">Rejected due to no permission</string>
+    <string name="create_folder_title">Enter your folder name</string>
+    <string name="create_folder_hint">Folder Name</string>
+    <string name="rename_file_title">Enter new file name</string>
+    <string name="rename_file_hint">New File Name</string>
+    <string name="remove_file_alert">The directory is not empty! This action will delete all subdirectories.</string>
+    <string name="positive">Okay</string>
+    <string name="negative">Cancel</string>
+    <string name="popup_delete">Delete</string>
+    <string name="popup_rename">Rename</string>
+    <string name="popup_copy">Copy</string>
+    <string name="bar_search">Search</string>
+    <string name="bar_multi_select">Multi select</string>
+    <string name="popup_hide">Hide</string>
 </resources>
