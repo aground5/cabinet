@@ -5,25 +5,28 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.webkit.MimeTypeMap
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
 import com.songi.cabinet.BuildConfig
 import java.io.File
+import java.nio.file.Files
 
 object OpenFilePlugin {
-
-    fun intentFileOpen(filePath: String, context: Context) {
+    fun intentFileOpen(path: String, fileName: String, context: Context) {
         var intent = Intent()
-        var file = File(filePath)
+        var file = File(path, fileName)
         var uri: Uri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileProvider", file)
         intent.setAction(android.content.Intent.ACTION_VIEW)
         intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        intent.setDataAndType(uri, getFileType(filePath))
+        intent.setDataAndType(uri, MimeTypeMap.getSingleton().getExtensionFromMimeType(file.extension))
 
         startActivity(context, intent, null)
     }
-    private fun getFileType(filePath: String): String {
-        val fileTypeStr = filePath.substring(filePath.lastIndexOf(".") + 1, filePath.length)
+
+    @Deprecated("Use getExtensionFromMimeType() instead.")
+    private fun getFileType(fileName: String): String {
+        val fileTypeStr = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length)
         return when (fileTypeStr) {
             "3gp" -> "video/3gpp"
             "torrent" -> "application/x-bittorrent"
@@ -80,10 +83,12 @@ object OpenFilePlugin {
             "rc" -> "text/plain"
             "rmvb" -> "audio/x-pn-realaudio"
             "rtf" -> "application/rtf"
+            "sdocx" -> "application/sdoc"
             "sh" -> "text/plain"
             "tar" -> "application/x-tar"
             "tgz" -> "application/x-compressed"
             "txt" -> "text/plain"
+            "vcf" -> "text/x-vcard"
             "wav" -> "audio/x-wav"
             "wma" -> "audio/x-ms-wma"
             "wmv" -> "audio/x-ms-wmv"

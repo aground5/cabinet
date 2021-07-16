@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cabinet</string>
+    <string name="desc_exit">앱을 나가시려면 한 번 더 누르십시오</string>
+    <string name="permission_fail">권한이 없어 동작을 수행할 수 없습니다</string>
+    <string name="create_folder_title">폴더 이름을 입력하세요</string>
+    <string name="create_folder_hint">폴더 이름</string>
+    <string name="rename_file_title">새 파일 이름을 입력하세요</string>
+    <string name="rename_file_hint">새 파일 이름</string>
+    <string name="remove_file_alert">폴더가 비어있지 않습니다! 모든 하위 파일 및 폴더가 함께 삭제됩니다.</string>
+    <string name="positive">확인</string>
+    <string name="negative">취소</string>
+    <string name="popup_delete">삭제</string>
+    <string name="popup_rename">이름 바꾸기</string>
+    <string name="popup_copy">복사</string>
+    <string name="bar_search">검색</string>
+    <string name="bar_multi_select">다중 선택</string>
+    <string name="popup_hide">숨기기</string>
+</resources>
