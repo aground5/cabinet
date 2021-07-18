@@ -1,24 +1,26 @@
 package com.songi.cabinet.file
 
 import android.app.AlertDialog
-import android.content.ContentResolver
 import android.content.Context
-import android.content.DialogInterface
 import android.database.Cursor
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import android.util.Log
-import android.widget.EditText
-import androidx.appcompat.widget.Toolbar
+import android.widget.ProgressBar
+import androidx.core.view.setPadding
+import androidx.lifecycle.LifecycleOwner
+import androidx.work.*
 import com.songi.cabinet.R
-import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.*
 import java.io.*
-import java.lang.Exception
 import java.text.Collator
+import java.text.DecimalFormat
 import java.util.*
+import kotlin.math.floor
+import kotlin.math.ln
+import kotlin.math.pow
 
-class FileManager(val context: Context, root: String) {
+class FileManager(val context: Context, root: String, val lifecycleOwner: LifecycleOwner) {
     private var TAG = "FileManager"
 
     private val mRoot = root
@@ -79,97 +81,176 @@ class FileManager(val context: Context, root: String) {
             e.printStackTrace()
         }
     }
-
+    
     fun importFile(uri: Uri) {
-        val fileName = getFileName(uri)
-        if (fileName != null) {
-            Log.d(TAG, fileName)
-        }
-        var fileDescriptor: ParcelFileDescriptor? = null
-        try {
-            fileDescriptor = context.contentResolver.openFileDescriptor(uri, "r")
-        } catch (e : FileNotFoundException) {
-            e.printStackTrace()
-        }
-
-        val internalFile = File(mCurrent, fileName)
-        try {
-            val externalFileInputStream = FileInputStream(fileDescriptor?.fileDescriptor)
-            val internalFileOutputStream = FileOutputStream(internalFile)
-
-            copyWithBuffer(externalFileInputStream, internalFileOutputStream)
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
+        val fileInfo = getFileName(uri)
+        copyWithBuffer(arrayOf(null, uri.toString()),
+            arrayOf(mCurrent, isFileExists(mCurrent, fileInfo?.get(0)!!)),
+            fileInfo[1]!!.toLong())
     }
 
-    fun copyWithBuffer(inputStream: FileInputStream, outputStream: FileOutputStream) {
-        var buffer: ByteArray = ByteArray(1024)
-
-        while (inputStream.read(buffer) > 0) {
-            outputStream.write(buffer)
-        }
-
-        inputStream.close()
-        outputStream.close()
-    }
-
-    private fun getFileName(uri: Uri): String? {
-        var result: String? = null
+    private fun getFileName(uri: Uri): Array<String?>? {
+        var result: Array<String?>? = null
         if (uri.scheme == "content") {
             val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
             try {
                 if (cursor != null && cursor.moveToFirst()) {
-                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+                    result = arrayOf(cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)),
+                        cursor.getString(cursor.getColumnIndex(OpenableColumns.SIZE)))
                 }
             } finally {
                 cursor?.close()
             }
         }
         if (result == null) {
-            result = uri.path
-            val cut = result!!.lastIndexOf('/')
+            result = arrayOf(uri.path)
+            val cut = result[0]!!.lastIndexOf('/')
             if (cut != -1) {
-                result = result.substring(cut + 1)
+                result[0] = result[0]!!.substring(cut + 1)
             }
         }
         return result
+    }
+
+    private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
+        val data = Data.Builder()
+            .putAll(mapOf("inputPath" to inputPath, "outputPath" to outputPath, "size" to size))
+            .build()
+        val copyBuilder = OneTimeWorkRequestBuilder<CopyWorker>()
+        copyBuilder.setInputData(data)
+        copyBuilder.addTag("COPY_BUILDER")
+        val copyWorker = copyBuilder.build()
+        WorkManager.getInstance(context).enqueue(copyWorker)
+
+        var progressBar: ProgressBar? = null
+        var alertDialog: AlertDialog? = null
+
+        WorkManager.getInstance(context)
+            .getWorkInfoByIdLiveData(copyWorker.id)
+            .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: WorkInfo? ->
+                if (workInfo != null) {
+                    if (workInfo!!.state == WorkInfo.State.ENQUEUED) {
+                        Log.d(TAG, "WorkInfo.State.ENQUEUED")
+                        progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                            max = 200
+                            isIndeterminate = false
+                            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
+                        }
+                        alertDialog = AlertDialog.Builder(context).apply {
+                            setTitle("파일 복사하는 중...")
+                            setCancelable(false)
+                            setView(progressBar)
+                            setMessage("")
+                        }.create()
+                        alertDialog!!.show()
+                    } else if (workInfo.state == WorkInfo.State.RUNNING) {
+                        Log.d(TAG, "WorkInfo.State.RUNNING")
+                        val copiedSize = workInfo.progress.getLong("PROGRESS", 0)
+                        if (progressBar != null) {
+                            Log.d(TAG, "progress : " + copiedSize.toString())
+                            val percentage = (copiedSize / (size / 200)).toInt()
+                            progressBar!!.progress = percentage
+                            alertDialog!!.setMessage("${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
+                        } else {
+                            Log.d(TAG, "progressBar is NULL!!")
+                        }
+                    } else if (workInfo.state.isFinished) {
+                        Log.d(TAG, "workInfo.state.isFinished")
+                        alertDialog?.dismiss()
+                        progressBar = null
+                        alertDialog = null
+                    }
+                }
+            })
+
+        /*WorkManager.getInstance(context)
+            // requestId is the WorkRequest id
+            .getWorkInfosByTagLiveData("COPY_BUILDER")
+            .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: List<WorkInfo?> ->
+                if (!workInfo.isNullOrEmpty()) {
+                    Log.d(TAG, "work")
+                    if (workInfo[0]?.state == WorkInfo.State.ENQUEUED) {
+                        Log.d(TAG, "WorkInfo.State.ENQUEUED")
+                        progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                            max = 10000
+                            isIndeterminate = false
+                            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
+                        }
+                        alertDialog = AlertDialog.Builder(context).apply {
+                            setTitle("파일 복사하는 중...")
+                            setCancelable(false)
+                            setView(progressBar)
+                            setMessage("")
+                        }.create()
+                        alertDialog!!.show()
+                    } else if (workInfo[0]?.state == WorkInfo.State.RUNNING) {
+                        Log.d(TAG, "WorkInfo.State.RUNNING")
+                        val progress = workInfo[0]?.progress?.getInt("PROGRESS", 0)
+                        if (progressBar != null) {
+                            Log.d(TAG, "progress : " + progress.toString())
+                            progressBar!!.progress = progress!!
+                        } else {
+                            Log.d(TAG, "progressBar is NULL!!")
+                        }
+                    } else if (workInfo[0]?.state!!.isFinished) {
+                        Log.d(TAG, "workInfo.state.isFinished")
+                        alertDialog?.dismiss()
+                        progressBar = null
+                        alertDialog = null
+                    }
+                }
+            })*/
+    }
+
+    fun byteCalculation(bytes: Long): String? {
+        var retFormat = "0"
+        val size = bytes.toDouble()
+        val s = arrayOf("bytes", "KB", "MB", "GB", "TB", "PB")
+        if (bytes !== 0L) {
+            val idx = floor(ln(size) / ln(1024.0)).toInt()
+            val df = DecimalFormat("#,###.##")
+            val ret = size / 1024.0.pow(floor(idx.toDouble()))
+            retFormat = df.format(ret).toString() + " " + s[idx]
+        } else {
+            retFormat += " " + s[0]
+        }
+        return retFormat
     }
 
     fun moveFile(filePath: Array<String>): Boolean {
         val file = File(filePath[0], filePath[1])
         Log.d(TAG, "$filePath[0]/$filePath[1] --> $mCurrent/$filePath[1]")
 
-        return file.renameTo(File(mCurrent, filePath[1]))
+        return file.renameTo(File(mCurrent, isFileExists(mCurrent, filePath[1])))
     }
 
     fun moveFile(filePath: Array<String>, droppedDir: String): Boolean {
         val file = File(filePath[0], filePath[1])
         Log.d(TAG, "$filePath[0]/$filePath[1] --> $mCurrent/$droppedDir/$filePath[1]")
 
-        return file.renameTo(File("$mCurrent/$droppedDir", filePath[1]))
+        return file.renameTo(File("$mCurrent/$droppedDir", isFileExists("$mCurrent/$droppedDir", filePath[1])))
     }
 
     fun moveFileToClipboard(fileName: String): Boolean {
         val file = File(mCurrent, fileName)
-        return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName))
+        return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
     }
 
+    
     fun copyFile(origFilePath: Array<String>) {
-        val inputStream = FileInputStream(File(origFilePath[0], origFilePath[1]))
-        val outputStream = FileOutputStream(File(mCurrent, origFilePath[1]))
-        try {
-            copyWithBuffer(inputStream, outputStream)
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
+        val inputFile = File(origFilePath[0], origFilePath[1])
+        copyWithBuffer(arrayOf(origFilePath[0], origFilePath[1]),
+            arrayOf(mCurrent, isFileExists(mCurrent, origFilePath[1])),
+            inputFile.totalSpace)
     }
 
+    
     fun copyFileToClipboard(fileName: String) {
-        val inputStream = FileInputStream(File(mCurrent, fileName))
-        val outputStream = FileOutputStream(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName))
+        val inputFile = File(mCurrent, fileName)
         try {
-            copyWithBuffer(inputStream, outputStream)
+            copyWithBuffer(arrayOf(mCurrent, fileName),
+                    arrayOf("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)),
+                inputFile.length())
         } catch (e: IOException) {
             e.printStackTrace()
         }
@@ -177,7 +258,7 @@ class FileManager(val context: Context, root: String) {
 
     fun renameFile(origFileName: String, newFileName: String) {
         val file = File(mCurrent, origFileName)
-        file.renameTo(File(mCurrent, newFileName))
+        file.renameTo(File(mCurrent, isFileExists(mCurrent, newFileName)))
     }
 
     fun removeSingleFile(fileName: String) : Boolean{
@@ -200,7 +281,7 @@ class FileManager(val context: Context, root: String) {
     }
 
     fun createFolder(folderName: String) {
-        val file = File(mCurrent, folderName)
+        val file = File(mCurrent, isFileExists(mCurrent, folderName))
         file.mkdirs()
     }
 
@@ -219,5 +300,22 @@ class FileManager(val context: Context, root: String) {
 
     fun goDir(dir: String) {
         mCurrent = "${mCurrent}/${dir}"
+    }
+
+    fun isFileExists(filePath: String, fileName: String) : String {
+        val file = File(filePath, fileName)
+        val fileNameOnly = fileName.substring(0, fileName.lastIndexOf("."))
+        val fileTypeStr = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length)
+        if (file.exists()) {
+            var i: Int = 1
+            while (File(filePath, "$fileNameOnly ($i).$fileTypeStr").exists()) {
+                i++
+            }
+            Log.d(TAG, "$fileNameOnly ($i).$fileTypeStr")
+            return "$fileNameOnly ($i).$fileTypeStr"
+        } else {
+            Log.d(TAG, fileName)
+            return fileName
+        }
     }
 }

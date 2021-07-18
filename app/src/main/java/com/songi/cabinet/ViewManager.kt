@@ -18,6 +18,7 @@ import com.airbnb.lottie.LottieAnimationView
 import com.airbnb.lottie.animation.keyframe.GradientColorKeyframeAnimation
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.OpenFilePlugin
+import kotlinx.coroutines.DelicateCoroutinesApi
 import java.io.File
 import java.lang.IllegalArgumentException
 import java.lang.NullPointerException
@@ -69,6 +70,7 @@ class ViewManager(private val fileManager: FileManager, private val context: Con
         contentObjectContainer.addView(linearLayout)
     }
 
+    @DelicateCoroutinesApi
     private fun createObject(objectType: Int, fileName: String, parentLinear: LinearLayout, isHidden: Boolean) {
         /**
          * 오브젝트의 크기를 결정짓는 linearLayout입니다. 여기에 imageView, popupLinearlayout이 추가되어 최종 parentLinear에 들어갑니다.

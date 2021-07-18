@@ -6,8 +6,11 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.drawable.AnimationDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.os.Parcelable
 import android.util.AttributeSet
 import android.util.Log
 import android.view.DragEvent
@@ -19,13 +22,18 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.view.setPadding
+import androidx.lifecycle.Observer
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
+import com.songi.cabinet.file.WatchDogCopy
 import java.lang.NullPointerException
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     private val TAG = "MainActivity"
     private var backPressedTime: Long = 0
     private val PERMISSION_READ_EXTERNAL_STORAGE = 1249
@@ -53,10 +61,13 @@ class MainActivity : AppCompatActivity() {
         mBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        fileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_user_folder")
+        fileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_user_folder", this)
         viewManager = ViewManager(fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false)
         viewManager.refreshView()
-        drawerFileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_temp_folder")
+        drawerFileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_temp_folder", this)
+
+        importAction()
+
         drawerViewManager = ViewManager(drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true)
         drawerViewManager.columnCount = 1
         drawerViewManager.refreshView()
@@ -161,6 +172,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun importAction() {
+        when (intent?.action) {
+            Intent.ACTION_SEND -> {
+                if ("text/plain" == intent.type) {
+                    intent.getStringExtra(Intent.EXTRA_TEXT)?.let { string ->
+
+                    }
+                } else {
+                    (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let { uri ->
+                        drawerFileManager!!.importFile(uri)
+                    }
+                }
+                mBinding!!.drawer.open()
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
+                    for( i in it ) {
+                        drawerFileManager!!.importFile(i as Uri)
+                    }
+                }
+                mBinding!!.drawer.open()
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         viewManager.refreshView()
@@ -240,7 +276,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var portraitColums = 3
+    private var landscapeColums = 6
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        when (newConfig.orientation) {
+            Configuration.ORIENTATION_PORTRAIT -> {
+                landscapeColums = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = portraitColums
+            }
+            Configuration.ORIENTATION_LANDSCAPE -> {
+                portraitColums = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = landscapeColums
+            }
+        }
+    }
+
+    override fun getWorkManagerConfiguration(): androidx.work.Configuration {
+        return if (BuildConfig.DEBUG) {
+            androidx.work.Configuration.Builder()
+                .setMinimumLoggingLevel(android.util.Log.DEBUG)
+                .build()
+        } else {
+            androidx.work.Configuration.Builder()
+                .setMinimumLoggingLevel(android.util.Log.ERROR)
+                .build()
+        }
     }
 }

@@ -16,6 +16,7 @@
         android:id="@+id/multi_select"
         android:icon="@drawable/ic_tick_box"
         android:title="@string/bar_multi_select"
+        android:visible="false"
         app:showAsAction="never" />
     <item
         android:id="@+id/app_bar_create_folder"

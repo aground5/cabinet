@@ -8,4 +8,5 @@
     <dimen name="expand_arrow_cubic_size">15dp</dimen>
     <dimen name="object_maxHeight">167dp</dimen>
     <dimen name="drawer_width">140dp</dimen>
+    <dimen name="progressbar_padding_size">20dp</dimen>
 </resources>
