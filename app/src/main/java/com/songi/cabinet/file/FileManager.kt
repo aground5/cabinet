@@ -1,11 +1,14 @@
 package com.songi.cabinet.file
 
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Context
+import android.content.DialogInterface
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import android.view.View
 import android.widget.ProgressBar
 import androidx.core.view.setPadding
 import androidx.lifecycle.LifecycleOwner
@@ -112,6 +115,19 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         return result
     }
 
+    val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+        max = 200
+        isIndeterminate = false
+        setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
+    }
+    val alertDialog = AlertDialog.Builder(context).apply {
+        setTitle("파일 복사하는 중...")
+        setView(progressBar)
+        setMessage("")
+        setCancelable(false)
+        setPositiveButton(R.string.positive) { dialog, which -> }
+    }.create()
+
     private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
         val data = Data.Builder()
             .putAll(mapOf("inputPath" to inputPath, "outputPath" to outputPath, "size" to size))
@@ -122,84 +138,33 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         val copyWorker = copyBuilder.build()
         WorkManager.getInstance(context).enqueue(copyWorker)
 
-        var progressBar: ProgressBar? = null
-        var alertDialog: AlertDialog? = null
-
         WorkManager.getInstance(context)
             .getWorkInfoByIdLiveData(copyWorker.id)
             .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: WorkInfo? ->
                 if (workInfo != null) {
                     if (workInfo!!.state == WorkInfo.State.ENQUEUED) {
                         Log.d(TAG, "WorkInfo.State.ENQUEUED")
-                        progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-                            max = 200
-                            isIndeterminate = false
-                            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
-                        }
-                        alertDialog = AlertDialog.Builder(context).apply {
-                            setTitle("파일 복사하는 중...")
-                            setCancelable(false)
-                            setView(progressBar)
-                            setMessage("")
-                        }.create()
-                        alertDialog!!.show()
                     } else if (workInfo.state == WorkInfo.State.RUNNING) {
                         Log.d(TAG, "WorkInfo.State.RUNNING")
                         val copiedSize = workInfo.progress.getLong("PROGRESS", 0)
                         if (progressBar != null) {
                             Log.d(TAG, "progress : " + copiedSize.toString())
                             val percentage = (copiedSize / (size / 200)).toInt()
-                            progressBar!!.progress = percentage
-                            alertDialog!!.setMessage("${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
+                            progressBar.setProgress(percentage, true)
+                            alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
+                            alertDialog.show()
+                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
                         } else {
-                            Log.d(TAG, "progressBar is NULL!!")
+                            Log.d(TAG, "progressBar is NULL!! : ${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
                         }
                     } else if (workInfo.state.isFinished) {
                         Log.d(TAG, "workInfo.state.isFinished")
-                        alertDialog?.dismiss()
-                        progressBar = null
-                        alertDialog = null
+                        progressBar.setProgress(200, true)
+                        alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(size)} / ${byteCalculation(size)}")
+                        alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.VISIBLE
                     }
                 }
             })
-
-        /*WorkManager.getInstance(context)
-            // requestId is the WorkRequest id
-            .getWorkInfosByTagLiveData("COPY_BUILDER")
-            .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: List<WorkInfo?> ->
-                if (!workInfo.isNullOrEmpty()) {
-                    Log.d(TAG, "work")
-                    if (workInfo[0]?.state == WorkInfo.State.ENQUEUED) {
-                        Log.d(TAG, "WorkInfo.State.ENQUEUED")
-                        progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-                            max = 10000
-                            isIndeterminate = false
-                            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
-                        }
-                        alertDialog = AlertDialog.Builder(context).apply {
-                            setTitle("파일 복사하는 중...")
-                            setCancelable(false)
-                            setView(progressBar)
-                            setMessage("")
-                        }.create()
-                        alertDialog!!.show()
-                    } else if (workInfo[0]?.state == WorkInfo.State.RUNNING) {
-                        Log.d(TAG, "WorkInfo.State.RUNNING")
-                        val progress = workInfo[0]?.progress?.getInt("PROGRESS", 0)
-                        if (progressBar != null) {
-                            Log.d(TAG, "progress : " + progress.toString())
-                            progressBar!!.progress = progress!!
-                        } else {
-                            Log.d(TAG, "progressBar is NULL!!")
-                        }
-                    } else if (workInfo[0]?.state!!.isFinished) {
-                        Log.d(TAG, "workInfo.state.isFinished")
-                        alertDialog?.dismiss()
-                        progressBar = null
-                        alertDialog = null
-                    }
-                }
-            })*/
     }
 
     fun byteCalculation(bytes: Long): String? {
@@ -281,7 +246,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
     }
 
     fun createFolder(folderName: String) {
-        val file = File(mCurrent, isFileExists(mCurrent, folderName))
+        val file = File(mCurrent, isFolderExists(mCurrent, folderName))
         file.mkdirs()
     }
 
@@ -316,6 +281,21 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         } else {
             Log.d(TAG, fileName)
             return fileName
+        }
+    }
+
+    fun isFolderExists(folderPath: String, folderName: String) : String {
+        val file = File(folderPath, folderName)
+        if (file.exists()) {
+            var i: Int = 1
+            while (File(folderPath, "$folderName ($i)").exists()) {
+                i++
+            }
+            Log.d(TAG, "$folderName ($i)")
+            return "$folderName ($i)"
+        } else {
+            Log.d(TAG, folderName)
+            return folderName
         }
     }
 }
