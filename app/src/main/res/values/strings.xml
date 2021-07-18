@@ -16,4 +16,10 @@
     <string name="bar_search">Search</string>
     <string name="bar_multi_select">Multi select</string>
     <string name="popup_hide">Hide</string>
+    <string name="bar_create_folder">Create Folder</string>
+    <string name="bar_import_file">Import File</string>
+    <string name="unorganized_files"><![CDATA[<Unorganized files>]]></string>
+    <string name="popup_move_to_clipboard">Move to Clipboard</string>
+    <string name="popup_copy_to_clipboard">Copy to Clipboard</string>
+    <string name="bar_settings">Settings</string>
 </resources>

@@ -19,11 +19,15 @@
         app:showAsAction="never" />
     <item
         android:id="@+id/app_bar_create_folder"
-        android:title="Create Folder"
+        android:title="@string/bar_create_folder"
         app:showAsAction="never" />
     <item
         android:id="@+id/app_bar_import"
-        android:title="Import File"
+        android:title="@string/bar_import_file"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/app_bar_settings"
+        android:title="@string/bar_settings"
         app:showAsAction="never" />
 
 </menu>

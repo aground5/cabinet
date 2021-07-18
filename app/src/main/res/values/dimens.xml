@@ -3,6 +3,9 @@
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
     <dimen name="object_padding_size">4dp</dimen>
-    <dimen name="object_text_maxline">37dp</dimen>
-    <dimen name="object_cubic_size">120dp</dimen>
+    <dimen name="object_text_maxWidth">102dp</dimen>
+    <dimen name="image_cubic_size">120dp</dimen>
+    <dimen name="expand_arrow_cubic_size">15dp</dimen>
+    <dimen name="object_maxHeight">167dp</dimen>
+    <dimen name="drawer_width">140dp</dimen>
 </resources>

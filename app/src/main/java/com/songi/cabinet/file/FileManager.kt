@@ -12,13 +12,16 @@ import android.util.Log
 import android.widget.EditText
 import androidx.appcompat.widget.Toolbar
 import com.songi.cabinet.R
+import kotlinx.coroutines.flow.merge
 import java.io.*
 import java.lang.Exception
+import java.text.Collator
+import java.util.*
 
-class FileManager(val context: Context) {
+class FileManager(val context: Context, root: String) {
     private var TAG = "FileManager"
 
-    private val mRoot = "${context.filesDir.absolutePath}/Cabinet_user_folder"
+    private val mRoot = root
     var mCurrent = mRoot; private set
     var mCurrentFolder = mCurrent.substring(mCurrent.lastIndexOf('/') + 1, mCurrent.length); private set
     init {
@@ -28,16 +31,40 @@ class FileManager(val context: Context) {
         }
     }
 
-    fun refreshFile(viewHidden: Boolean) : Array<File> {
-        var arFiles = if (viewHidden) {
-            File(mCurrent).listFiles()
+    fun refreshFile(viewHidden: Boolean) : MutableList<String> {
+        var directories = if (viewHidden) {
+            File(mCurrent).listFiles(FileFilter { pathname ->
+                return@FileFilter pathname.isDirectory
+            })
         } else {
             File(mCurrent).listFiles(FileFilter { pathname ->
-                return@FileFilter !pathname.isHidden
+                return@FileFilter !pathname.isHidden && pathname.isDirectory
             })
         }
+        var files = if (viewHidden) {
+            File(mCurrent).listFiles(FileFilter { pathname ->
+                return@FileFilter !pathname.isDirectory
+            })
+        } else {
+            File(mCurrent).listFiles(FileFilter { pathname ->
+                return@FileFilter !pathname.isHidden && !pathname.isDirectory
+            })
+        }
+
+        val collator = Collator.getInstance(Locale(context.applicationContext.resources.configuration.locales.get(0).language))
+        var mutableDirectories = mutableListOf<String>()
+        for(i in directories) {
+            mutableDirectories.add(i.name)
+        }
+        var mutableFiles = mutableListOf<String>()
+        for(i in files) {
+            mutableFiles.add(i.name)
+        }
+        Collections.sort(mutableDirectories, collator)
+        Collections.sort(mutableFiles, collator)
+        mutableDirectories.addAll(mutableFiles)
         mCurrentFolder = mCurrent.substring(mCurrent.lastIndexOf('/') + 1, mCurrent.length)
-        return arFiles
+        return mutableDirectories
     }
 
     @Deprecated("Use importFile(Uri) instead. Not absolute file path.", ReplaceWith("importFile(index)"))
@@ -65,17 +92,26 @@ class FileManager(val context: Context) {
             e.printStackTrace()
         }
 
-        val externalFileInputStream = FileInputStream(fileDescriptor?.fileDescriptor)
         val internalFile = File(mCurrent, fileName)
-        val internalFileOutputStream = FileOutputStream(internalFile)
         try {
-            internalFileOutputStream.write(externalFileInputStream.readBytes())
+            val externalFileInputStream = FileInputStream(fileDescriptor?.fileDescriptor)
+            val internalFileOutputStream = FileOutputStream(internalFile)
+
+            copyWithBuffer(externalFileInputStream, internalFileOutputStream)
         } catch (e: IOException) {
             e.printStackTrace()
-        } finally {
-            externalFileInputStream.close()
-            internalFileOutputStream.close()
         }
+    }
+
+    fun copyWithBuffer(inputStream: FileInputStream, outputStream: FileOutputStream) {
+        var buffer: ByteArray = ByteArray(1024)
+
+        while (inputStream.read(buffer) > 0) {
+            outputStream.write(buffer)
+        }
+
+        inputStream.close()
+        outputStream.close()
     }
 
     private fun getFileName(uri: Uri): String? {
@@ -100,6 +136,45 @@ class FileManager(val context: Context) {
         return result
     }
 
+    fun moveFile(filePath: Array<String>): Boolean {
+        val file = File(filePath[0], filePath[1])
+        Log.d(TAG, "$filePath[0]/$filePath[1] --> $mCurrent/$filePath[1]")
+
+        return file.renameTo(File(mCurrent, filePath[1]))
+    }
+
+    fun moveFile(filePath: Array<String>, droppedDir: String): Boolean {
+        val file = File(filePath[0], filePath[1])
+        Log.d(TAG, "$filePath[0]/$filePath[1] --> $mCurrent/$droppedDir/$filePath[1]")
+
+        return file.renameTo(File("$mCurrent/$droppedDir", filePath[1]))
+    }
+
+    fun moveFileToClipboard(fileName: String): Boolean {
+        val file = File(mCurrent, fileName)
+        return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName))
+    }
+
+    fun copyFile(origFilePath: Array<String>) {
+        val inputStream = FileInputStream(File(origFilePath[0], origFilePath[1]))
+        val outputStream = FileOutputStream(File(mCurrent, origFilePath[1]))
+        try {
+            copyWithBuffer(inputStream, outputStream)
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
+    fun copyFileToClipboard(fileName: String) {
+        val inputStream = FileInputStream(File(mCurrent, fileName))
+        val outputStream = FileOutputStream(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName))
+        try {
+            copyWithBuffer(inputStream, outputStream)
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
     fun renameFile(origFileName: String, newFileName: String) {
         val file = File(mCurrent, origFileName)
         file.renameTo(File(mCurrent, newFileName))
@@ -110,7 +185,7 @@ class FileManager(val context: Context) {
         return file.delete()
     }
 
-    fun removeMultipleFile(fileName: String) : Boolean{
+    fun removeRecursively(fileName: String) : Boolean{
         val file = File(mCurrent, fileName)
         return file.deleteRecursively()
     }

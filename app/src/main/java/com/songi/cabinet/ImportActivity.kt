@@ -19,7 +19,7 @@ class ImportActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_import)
 
-        val fileManager = FileManager(this)
+        val fileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_temp_folder")
 
         when (intent?.action) {
             Intent.ACTION_SEND -> {
