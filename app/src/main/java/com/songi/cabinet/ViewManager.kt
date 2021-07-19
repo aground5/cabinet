@@ -119,7 +119,8 @@ class ViewManager(private val tag: String,
                     refreshView()
                 }
                 setOnDragListener { v, event ->
-                    if ((event.localState as Array<String>)[1] == v.contentDescription.toString()) {
+                    if ((event.localState as Array<String>)[1] == v.contentDescription.toString() &&
+                        (event.localState as Array<String>)[0] == fileManager.mCurrent) {
                         //Log.d(TAG, "This is right this folder.")
                         return@setOnDragListener true
                     }
