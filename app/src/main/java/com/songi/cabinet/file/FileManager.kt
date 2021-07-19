@@ -23,7 +23,11 @@ import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.pow
 
-class FileManager(val context: Context, root: String, val lifecycleOwner: LifecycleOwner) {
+class FileManager(private val tag: String,
+                  private val context: Context,
+                  root: String,
+                  private val lifecycleOwner: LifecycleOwner,
+                  private val refreshViewRequester: RefreshViewRequester) {
     private var TAG = "FileManager"
 
     private val mRoot = root
@@ -126,7 +130,9 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         setView(progressBar)
         setMessage("")
         setCancelable(false)
-        setPositiveButton(R.string.positive) { dialog, which -> }
+        setPositiveButton(R.string.positive) { dialog, which ->
+            refreshViewRequester.request(tag)
+        }
     }.create()
 
     private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
@@ -197,7 +203,9 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
 
     fun moveFileToClipboard(fileName: String) : Boolean {
         val file = File(mCurrent, fileName)
-        return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
+        val result = file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
+        refreshViewRequester.request("DRAWER")
+        return result
     }
 
     
@@ -218,6 +226,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         } catch (e: IOException) {
             e.printStackTrace()
         }
+        refreshViewRequester.request("DRAWER")
     }
 
     fun renameFile(origFileName: String, newFileName: String) {

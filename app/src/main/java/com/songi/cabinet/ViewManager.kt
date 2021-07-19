@@ -15,12 +15,19 @@ import androidx.core.view.setPadding
 import com.airbnb.lottie.LottieAnimationView
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.OpenFilePlugin
+import com.songi.cabinet.file.RefreshViewRequester
 import kotlinx.coroutines.DelicateCoroutinesApi
 import java.io.File
 import java.lang.IllegalArgumentException
 import java.lang.NullPointerException
 
-class ViewManager(private val fileManager: FileManager, private val context: Context, private val contentObjectContainer: LinearLayout, private val toolbar: Toolbar, val isDrawer: Boolean) {
+class ViewManager(private val tag: String,
+                  private val fileManager: FileManager,
+                  private val context: Context,
+                  private val contentObjectContainer: LinearLayout,
+                  private val toolbar: Toolbar,
+                  private val isDrawer: Boolean,
+                  refreshViewRequester: RefreshViewRequester) {
 
     private val TAG = "ViewManager"
     private val OBJECT_BLANK = 224
@@ -28,6 +35,13 @@ class ViewManager(private val fileManager: FileManager, private val context: Con
     private val OBJECT_FILE = 226  /* TODO: 파일 세분화 */
     var viewHidden = false
     var columnCount = 3
+    init {
+        refreshViewRequester.addOnRequestListener { requestTag ->
+            if (tag == requestTag) {
+                refreshView()
+            }
+        }
+    }
 
     /**
      * 화면을 업데이트 합니다. columCount에 맞게 정렬됩니다.

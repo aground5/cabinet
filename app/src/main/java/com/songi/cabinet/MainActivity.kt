@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
+import com.songi.cabinet.file.RefreshViewRequester
 import java.lang.NullPointerException
 
 
@@ -47,16 +48,20 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         mBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        fileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_user_folder", this)
-        viewManager = ViewManager(fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false)
+        val refreshViewRequester = RefreshViewRequester()
+
+        fileManager = FileManager("CONTENT", this, "${filesDir.absolutePath}/Cabinet_user_folder", this, refreshViewRequester)
+        viewManager = ViewManager("CONTENT", fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester)
         viewManager.refreshView()
-        drawerFileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_temp_folder", this)
+        drawerFileManager = FileManager("DRAWER", this, "${filesDir.absolutePath}/Cabinet_temp_folder", this, refreshViewRequester)
 
         importAction()
 
-        drawerViewManager = ViewManager(drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true)
+        drawerViewManager = ViewManager("DRAWER", drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true, refreshViewRequester)
         drawerViewManager.columnCount = 1
         drawerViewManager.refreshView()
+
+
 
         mBinding!!.apply {
             toolbar.setOnMenuItemClickListener { item ->
