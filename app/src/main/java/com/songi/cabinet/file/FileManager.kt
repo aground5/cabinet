@@ -36,8 +36,8 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         }
     }
 
-    fun refreshFile(viewHidden: Boolean) : MutableList<String> {
-        var directories = if (viewHidden) {
+    fun refreshFile(viewHidden: Boolean) : MutableList<String>{
+        val directories = if (viewHidden) {
             File(mCurrent).listFiles(FileFilter { pathname ->
                 return@FileFilter pathname.isDirectory
             })
@@ -46,7 +46,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
                 return@FileFilter !pathname.isHidden && pathname.isDirectory
             })
         }
-        var files = if (viewHidden) {
+        val files = if (viewHidden) {
             File(mCurrent).listFiles(FileFilter { pathname ->
                 return@FileFilter !pathname.isDirectory
             })
@@ -57,7 +57,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         }
 
         val collator = Collator.getInstance(Locale(context.applicationContext.resources.configuration.locales.get(0).language))
-        var mutableDirectories = mutableListOf<String>()
+        val mutableDirectories = mutableListOf<String>()
         for(i in directories) {
             mutableDirectories.add(i.name)
         }
@@ -69,6 +69,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         Collections.sort(mutableFiles, collator)
         mutableDirectories.addAll(mutableFiles)
         mCurrentFolder = mCurrent.substring(mCurrent.lastIndexOf('/') + 1, mCurrent.length)
+
         return mutableDirectories
     }
 
@@ -92,7 +93,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
             fileInfo[1]!!.toLong())
     }
 
-    private fun getFileName(uri: Uri): Array<String?>? {
+    private fun getFileName(uri: Uri): Array<String?> {
         var result: Array<String?>? = null
         if (uri.scheme == "content") {
             val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
@@ -142,21 +143,19 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
             .getWorkInfoByIdLiveData(copyWorker.id)
             .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: WorkInfo? ->
                 if (workInfo != null) {
-                    if (workInfo!!.state == WorkInfo.State.ENQUEUED) {
+                    if (workInfo.state == WorkInfo.State.ENQUEUED) {
                         Log.d(TAG, "WorkInfo.State.ENQUEUED")
                     } else if (workInfo.state == WorkInfo.State.RUNNING) {
                         Log.d(TAG, "WorkInfo.State.RUNNING")
                         val copiedSize = workInfo.progress.getLong("PROGRESS", 0)
-                        if (progressBar != null) {
-                            Log.d(TAG, "progress : " + copiedSize.toString())
-                            val percentage = (copiedSize / (size / 200)).toInt()
-                            progressBar.setProgress(percentage, true)
-                            alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
-                            alertDialog.show()
-                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
-                        } else {
-                            Log.d(TAG, "progressBar is NULL!! : ${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
-                        }
+
+                        Log.d(TAG, "progress : $copiedSize")
+                        val percentage = (copiedSize / (size / 200)).toInt()
+
+                        progressBar.setProgress(percentage, true)
+                        alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
+                        alertDialog.show()
+                        alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
                     } else if (workInfo.state.isFinished) {
                         Log.d(TAG, "workInfo.state.isFinished")
                         progressBar.setProgress(200, true)
@@ -171,7 +170,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         var retFormat = "0"
         val size = bytes.toDouble()
         val s = arrayOf("bytes", "KB", "MB", "GB", "TB", "PB")
-        if (bytes !== 0L) {
+        if (bytes != 0L) {
             val idx = floor(ln(size) / ln(1024.0)).toInt()
             val df = DecimalFormat("#,###.##")
             val ret = size / 1024.0.pow(floor(idx.toDouble()))
@@ -196,7 +195,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         return file.renameTo(File("$mCurrent/$droppedDir", isFileExists("$mCurrent/$droppedDir", filePath[1])))
     }
 
-    fun moveFileToClipboard(fileName: String): Boolean {
+    fun moveFileToClipboard(fileName: String) {
         val file = File(mCurrent, fileName)
         return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
     }
@@ -246,7 +245,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
     }
 
     fun createFolder(folderName: String) {
-        val file = File(mCurrent, isFolderExists(mCurrent, folderName))
+        val file = File(mCurrent, isFileExists(mCurrent, folderName))
         file.mkdirs()
     }
 
@@ -269,6 +268,20 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
 
     fun isFileExists(filePath: String, fileName: String) : String {
         val file = File(filePath, fileName)
+        if (fileName.lastIndexOf(".") <= 0 )
+        {
+            if (file.exists()) {
+                var i: Int = 1
+                while (File(filePath, "$fileName ($i)").exists()) {
+                    i++
+                }
+                Log.d(TAG, "$fileName ($i)")
+                return "$fileName ($i)"
+            } else {
+                Log.d(TAG, fileName)
+                return fileName
+            }
+        }
         val fileNameOnly = fileName.substring(0, fileName.lastIndexOf("."))
         val fileTypeStr = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length)
         if (file.exists()) {
@@ -281,21 +294,6 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         } else {
             Log.d(TAG, fileName)
             return fileName
-        }
-    }
-
-    fun isFolderExists(folderPath: String, folderName: String) : String {
-        val file = File(folderPath, folderName)
-        if (file.exists()) {
-            var i: Int = 1
-            while (File(folderPath, "$folderName ($i)").exists()) {
-                i++
-            }
-            Log.d(TAG, "$folderName ($i)")
-            return "$folderName ($i)"
-        } else {
-            Log.d(TAG, folderName)
-            return folderName
         }
     }
 }

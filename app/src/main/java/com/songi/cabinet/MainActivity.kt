@@ -1,35 +1,22 @@
 package com.songi.cabinet
 
 import android.app.AlertDialog
-import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.drawable.AnimationDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
-import android.util.AttributeSet
 import android.util.Log
 import android.view.DragEvent
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
 import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
-import androidx.core.view.setPadding
-import androidx.lifecycle.Observer
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import com.google.android.material.switchmaterial.SwitchMaterial
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
-import com.songi.cabinet.file.WatchDogCopy
+import com.songi.cabinet.file.ViewRefreshRequester
 import java.lang.NullPointerException
 
 
@@ -169,6 +156,8 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         findViewById<Switch>(R.id.view_hidden_toggle).setOnCheckedChangeListener { buttonView, isChecked ->
             viewManager.viewHidden = isChecked
             viewManager.refreshView()
+            drawerViewManager.viewHidden = isChecked
+            drawerViewManager.refreshView()
         }
     }
 
@@ -212,7 +201,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     }
 
     private fun importFile() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
         }
@@ -276,18 +265,18 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         }
     }
 
-    private var portraitColums = 3
-    private var landscapeColums = 6
+    private var portraitColumns = 3
+    private var landscapeColumns = 6
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         when (newConfig.orientation) {
             Configuration.ORIENTATION_PORTRAIT -> {
-                landscapeColums = mBinding!!.seekBar.progress
-                mBinding!!.seekBar.progress = portraitColums
+                landscapeColumns = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = portraitColumns
             }
             Configuration.ORIENTATION_LANDSCAPE -> {
-                portraitColums = mBinding!!.seekBar.progress
-                mBinding!!.seekBar.progress = landscapeColums
+                portraitColumns = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = landscapeColumns
             }
         }
     }

@@ -18,7 +18,7 @@ class ImportActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_import)
-
+/*
         val fileManager = FileManager(this, "${filesDir.absolutePath}/Cabinet_temp_folder", this)
 
         when (intent?.action) {
@@ -46,6 +46,6 @@ class ImportActivity : AppCompatActivity() {
                 Toast.makeText(this, "Error occurred in process of import.", Toast.LENGTH_SHORT).show()
             }
         }
-
+*/
     }
 }

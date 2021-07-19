@@ -11,11 +11,8 @@ import android.view.*
 import android.widget.*
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
-import androidx.core.view.isInvisible
 import androidx.core.view.setPadding
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.airbnb.lottie.LottieAnimationView
-import com.airbnb.lottie.animation.keyframe.GradientColorKeyframeAnimation
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.OpenFilePlugin
 import kotlinx.coroutines.DelicateCoroutinesApi

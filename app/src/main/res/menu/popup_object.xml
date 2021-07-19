@@ -12,7 +12,7 @@
     <item
         android:id="@+id/popup_copy_to_clipboard"
         android:title="@string/popup_copy_to_clipboard" />
-    <itemd
+    <item
         android:id="@+id/popup_hidden"
         android:title="@string/popup_hide" />
     <item
