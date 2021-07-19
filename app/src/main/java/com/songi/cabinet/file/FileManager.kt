@@ -195,7 +195,7 @@ class FileManager(val context: Context, root: String, val lifecycleOwner: Lifecy
         return file.renameTo(File("$mCurrent/$droppedDir", isFileExists("$mCurrent/$droppedDir", filePath[1])))
     }
 
-    fun moveFileToClipboard(fileName: String) {
+    fun moveFileToClipboard(fileName: String) : Boolean {
         val file = File(mCurrent, fileName)
         return file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
     }

@@ -16,7 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
-import com.songi.cabinet.file.ViewRefreshRequester
 import java.lang.NullPointerException
 
 
