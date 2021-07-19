@@ -163,8 +163,9 @@
             android:id="@+id/drawer_refresh_layout"
             android:layout_width="@dimen/drawer_width"
             android:layout_height="match_parent"
-            android:layout_gravity="start"
-            android:background="@color/white">
+            android:layout_gravity="left"
+            android:background="@color/white"
+            tools:ignore="RtlHardcoded">
 
             <ScrollView
                 android:id="@+id/drawer_scrollable"
@@ -209,6 +210,26 @@
             </ScrollView>
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     </androidx.drawerlayout.widget.DrawerLayout>
+    <ImageView
+        android:id="@+id/drawer_extend_space"
+        android:layout_width="15dp"
+        android:layout_height="0dp"
+        android:background="@color/black"
+        android:alpha="0"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"/>
+
+    <ImageView
+        android:id="@+id/back_space"
+        android:layout_width="0dp"
+        android:layout_height="15dp"
+        android:background="@color/black"
+        android:alpha="0"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
 
     <SeekBar
         android:id="@+id/seekBar"

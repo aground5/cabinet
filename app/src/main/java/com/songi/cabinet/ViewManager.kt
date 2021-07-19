@@ -13,6 +13,11 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.core.view.setPadding
 import com.airbnb.lottie.LottieAnimationView
+import com.songi.cabinet.Constants.FOLDER_TIME_INTERVAL
+import com.songi.cabinet.Constants.IMAGEVIEW_ALPHA
+import com.songi.cabinet.Constants.OBJECT_BLANK
+import com.songi.cabinet.Constants.OBJECT_DIR
+import com.songi.cabinet.Constants.OBJECT_FILE
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.OpenFilePlugin
 import com.songi.cabinet.file.RefreshViewRequester
@@ -30,9 +35,7 @@ class ViewManager(private val tag: String,
                   refreshViewRequester: RefreshViewRequester) {
 
     private val TAG = "ViewManager"
-    private val OBJECT_BLANK = 224
-    private val OBJECT_DIR = 225
-    private val OBJECT_FILE = 226  /* TODO: 파일 세분화 */
+
     var viewHidden = false
     var columnCount = 3
     init {
@@ -70,9 +73,9 @@ class ViewManager(private val tag: String,
              * 파일의 종류를 구분합니다. 현재는 디렉토리, 파일 두 종류로만 구분짓습니다.
              */
             if (file.isDirectory) {
-                createObject(OBJECT_DIR, arFiles[i], linearLayout, File(fileManager.mCurrent, arFiles[i]).isHidden)
+                createObject(OBJECT_DIR, arFiles[i], linearLayout, file.isHidden)
             } else {
-                createObject(OBJECT_FILE, arFiles[i], linearLayout, File(fileManager.mCurrent, arFiles[i]).isHidden)
+                createObject(OBJECT_FILE, arFiles[i], linearLayout, file.isHidden)
             }
         }
         repeat((columnCount - arFiles.size % columnCount) % columnCount) {
@@ -83,6 +86,7 @@ class ViewManager(private val tag: String,
 
     @DelicateCoroutinesApi
     private fun createObject(objectType: Int, fileName: String, parentLinear: LinearLayout, isHidden: Boolean) {
+        var isHidden = isHidden
         /**
          * 오브젝트의 크기를 결정짓는 linearLayout입니다. 여기에 imageView, popupLinearlayout이 추가되어 최종 parentLinear에 들어갑니다.
          */
@@ -116,7 +120,8 @@ class ViewManager(private val tag: String,
                 }
                 setOnDragListener { v, event ->
                     if ((event.localState as Array<String>)[1] == v.contentDescription.toString()) {
-                        return@setOnDragListener false
+                        //Log.d(TAG, "This is right this folder.")
+                        return@setOnDragListener true
                     }
                     when (event.action) {
                         DragEvent.ACTION_DRAG_ENTERED -> {
@@ -127,7 +132,7 @@ class ViewManager(private val tag: String,
                                 fileManager.goDir(fileName)
                                 toolbar.title = fileName
                                 refreshView()
-                            }, 2000)
+                            }, FOLDER_TIME_INTERVAL)
                         }
                         DragEvent.ACTION_DRAG_EXITED -> {
                             try {
@@ -148,7 +153,9 @@ class ViewManager(private val tag: String,
                             }
                             setMaxProgress(1f)
                             resumeAnimation()
-                            fileManager.moveFile(event.localState as Array<String>, v.contentDescription.toString())
+                            if (!fileManager.moveFile(event.localState as Array<String>, v.contentDescription.toString())) {
+                                return@setOnDragListener true
+                            }
                             refreshView()
                         }
                     }
@@ -161,20 +168,6 @@ class ViewManager(private val tag: String,
                 }
             }
 
-            /**
-             * 길게 눌렀을때, 드래그 앤 드롭 시작
-             */
-            setOnLongClickListener { view ->
-                val item = ClipData.Item(view.tag as? CharSequence)
-                Log.d(TAG, "imageView_$fileName: ${view.tag}")
-                val dragData = ClipData(view.tag as? CharSequence, arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
-                val myShadow = View.DragShadowBuilder(this)
-                val filePath: Array<String> = arrayOf(fileManager.mCurrent, fileName)
-                linearLayout.visibility = LinearLayout.INVISIBLE
-                view.startDragAndDrop(dragData, myShadow, filePath, 0)
-
-                return@setOnLongClickListener true
-            }
             when (objectType) {     // TODO: 이미지, 동영상, PDF 등은 썸네일을 아이콘으로. 나머지는 아이콘 따로 제작하기. 후 버전에 있을 예정.
                 OBJECT_DIR -> {
                     setAnimation(R.raw.animated_folder)
@@ -182,8 +175,27 @@ class ViewManager(private val tag: String,
                 OBJECT_FILE -> setImageResource(R.drawable.ic_file)
             }
             if (isHidden) {
-                alpha = 0.5f
+                alpha = IMAGEVIEW_ALPHA
             }
+        }
+
+        val textView = TextView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            maxWidth = context.resources.getDimensionPixelSize(R.dimen.object_text_maxWidth)
+            text = fileName
+            gravity = Gravity.CENTER_HORIZONTAL
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        val expandArrow = ImageView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setImageResource(R.drawable.ic_expand_more)
         }
 
         val popupLinearLayout = LinearLayout(context).apply {
@@ -201,6 +213,12 @@ class ViewManager(private val tag: String,
                     if (isDrawer) {
                         menu.findItem(R.id.popup_copy_to_clipboard).isVisible = false
                         menu.findItem(R.id.popup_move_to_clipboard).isVisible = false
+                    }
+                    if (objectType == OBJECT_DIR) {
+                        menu.findItem(R.id.popup_copy_to_clipboard).isVisible = false   // TODO: 복사기능 넣을것인지 말것인지 결졍.
+                    }
+                    if (isHidden) {
+                        menu.findItem(R.id.popup_hidden).setTitle(R.string.popup_show)
                     }
                     setOnMenuItemClickListener { items ->
                         when (items.itemId) {          // TODO:메뉴 아이템 추가
@@ -262,29 +280,27 @@ class ViewManager(private val tag: String,
                 }
             }
         }
-        val textView = TextView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            maxWidth = context.resources.getDimensionPixelSize(R.dimen.object_text_maxWidth)
-            text = fileName
-            gravity = Gravity.CENTER_HORIZONTAL
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        val expandArrow = ImageView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setImageResource(R.drawable.ic_expand_more)
-        }
 
         popupLinearLayout.addView(textView)
         popupLinearLayout.addView(expandArrow)
         linearLayout.addView(imageView)
         linearLayout.addView(popupLinearLayout)
+
+        /**
+         * 길게 눌렀을때, 드래그 앤 드롭 시작
+         */
+        imageView.setOnLongClickListener { view ->
+            val item = ClipData.Item(view.tag as? CharSequence)
+            Log.d(TAG, "imageView_$fileName: ${view.tag}")
+            val dragData = ClipData(view.tag as? CharSequence, arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
+            val myShadow = View.DragShadowBuilder(linearLayout)
+            val filePath: Array<String> = arrayOf(fileManager.mCurrent, fileName)
+            // linearLayout.visibility = LinearLayout.INVISIBLE // TODO: 유저 의견 반영 바람
+            view.startDragAndDrop(dragData, myShadow, filePath, 0)
+
+            return@setOnLongClickListener true
+        }
+
         parentLinear.addView(linearLayout)
     }
 

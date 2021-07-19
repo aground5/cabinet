@@ -14,6 +14,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.songi.cabinet.Constants.COPY_PROGRESS
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -48,7 +49,7 @@ class CopyWorker (context: Context, parameters: WorkerParameters) :
             copiedSize += 1024
             if (System.currentTimeMillis() - time > 1000L) {
                 time = System.currentTimeMillis()
-                setProgress(workDataOf("PROGRESS" to copiedSize))
+                setProgress(workDataOf(COPY_PROGRESS to copiedSize))
             }
             //Log.d(TAG, "filemanager: $copiedSize")
             outputStream.write(buffer)

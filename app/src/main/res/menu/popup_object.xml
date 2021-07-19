@@ -5,7 +5,8 @@
         android:title="@string/popup_rename" />
     <item
         android:id="@+id/popup_copy"
-        android:title="@string/popup_copy" />
+        android:title="@string/popup_copy"
+        android:visible="false"/>   <!--TODO-->
     <item
         android:id="@+id/popup_move_to_clipboard"
         android:title="@string/popup_move_to_clipboard" />
