@@ -10,10 +10,17 @@ import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
 import android.view.DragEvent
+import android.view.View
 import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.drawerlayout.widget.DrawerLayout
+import com.songi.cabinet.Constants.BACK_SPACE_TIME_INTERVAL
+import com.songi.cabinet.Constants.DRAWER_TIME_INTERVAL
+import com.songi.cabinet.Constants.EXTEND_SPACE_ALPHA
+import com.songi.cabinet.Constants.PERMISSION_READ_EXTERNAL_STORAGE
+import com.songi.cabinet.Constants.TIME_INTERVAL
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.RefreshViewRequester
@@ -23,8 +30,6 @@ import java.lang.NullPointerException
 class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     private val TAG = "MainActivity"
     private var backPressedTime: Long = 0
-    private val PERMISSION_READ_EXTERNAL_STORAGE = 1249
-    private val TIME_INTERVAL: Long = 2000
     private var fileManager: FileManager? = null
     private lateinit var viewManager: ViewManager
     private var drawerFileManager: FileManager? = null
@@ -50,6 +55,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
 
         val refreshViewRequester = RefreshViewRequester()
 
+
         fileManager = FileManager("CONTENT", this, "${filesDir.absolutePath}/Cabinet_user_folder", this, refreshViewRequester)
         viewManager = ViewManager("CONTENT", fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester)
         viewManager.refreshView()
@@ -61,7 +67,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         drawerViewManager.columnCount = 1
         drawerViewManager.refreshView()
 
-
+        viewColumnSaver = ViewColumnSaver(filesDir.absolutePath)
 
         mBinding!!.apply {
             toolbar.setOnMenuItemClickListener { item ->
@@ -91,29 +97,78 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                 }
                 return@setOnMenuItemClickListener true
             }
+            backSpace.setOnDragListener { v, event ->
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_ENTERED -> {
+                        Log.d(TAG, "backSpace: EXITED")
+                        backSpace.handler.postDelayed(Runnable {
+                            onBackPressed()
+                        }, BACK_SPACE_TIME_INTERVAL)
+                        backSpace.alpha = EXTEND_SPACE_ALPHA
+                    }
+                    DragEvent.ACTION_DRAG_EXITED -> {
+                        Log.d(TAG, "backSpace: ENTERED")
+                        backSpace.alpha = 0.0f
+                        try {
+                            backSpace.handler.removeCallbacksAndMessages(null)
+                        } catch (e: NullPointerException) {
+                            e.printStackTrace()
+                        }
+                    }
+                    DragEvent.ACTION_DROP -> {
+                        Log.d(TAG, "backSpace: DROP")
+                    }
+                }
+
+                return@setOnDragListener true
+            }
+            drawerExtendSpace.setOnDragListener { v, event ->
+                if (!drawer.isOpen) {
+                    when (event.action) {
+                        DragEvent.ACTION_DRAG_ENTERED -> {
+                            Log.d(TAG, "drawerScrollable: EXITED")
+                            drawerScrollable.handler.postDelayed(Runnable {
+                                drawer.open()
+                                drawerExtendSpace.alpha = 0.0f
+                            }, DRAWER_TIME_INTERVAL)
+                            drawerExtendSpace.alpha = EXTEND_SPACE_ALPHA
+                        }
+                        DragEvent.ACTION_DRAG_EXITED -> {
+                            Log.d(TAG, "drawerScrollable: ENTERED")
+                            drawer.close()
+                            drawerExtendSpace.alpha = 0.0f
+                            try {
+                                drawerScrollable.handler.removeCallbacksAndMessages(null)
+                            } catch (e: NullPointerException) {
+                                e.printStackTrace()
+                            }
+                        }
+                        DragEvent.ACTION_DROP -> {
+                            Log.d(TAG, "drawerScrollable: DROP")
+                        }
+                    }
+                }
+
+                Log.d(TAG,"drawer.isOpen: ${drawer.isOpen}")
+
+                return@setOnDragListener true
+            }
             contentScrollable.setOnDragListener { v, event ->
                 when (event.action) {
                     DragEvent.ACTION_DROP -> {
                         Log.d(TAG, "fileContainer: DROP")
-                        fileManager!!.moveFile(event.localState as Array<String>)
-                        viewManager.refreshView()
+                        if (fileManager!!.moveFile(event.localState as Array<String>)) {
+                            viewManager.refreshView()
+                            drawerViewManager.refreshView()
+                            return@setOnDragListener true
+                        } else {
+                            return@setOnDragListener false
+                        }
                     }
                 }
                 return@setOnDragListener true
             }
 
-            seekBar.setOnSeekBarChangeListener( object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
-                    viewManager.columnCount = seekBar.progress
-                    viewManager.refreshView()
-                }
-
-                override fun onStartTrackingTouch(seekBar: SeekBar) {
-                }
-
-                override fun onStopTrackingTouch(seekBar: SeekBar) {
-                }
-            })
             drawerScrollable.setOnDragListener { v, event ->
                 when (event.action) {
                     DragEvent.ACTION_DRAG_ENTERED -> {
@@ -129,12 +184,17 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                         Log.d(TAG, "drawerScrollable: EXITED")
                         drawerScrollable.handler.postDelayed(Runnable {
                             drawer.close()
-                        }, 1000)
+                        }, DRAWER_TIME_INTERVAL)
                     }
                     DragEvent.ACTION_DROP -> {
                         Log.d(TAG, "drawerScrollable: DROP")
-                        drawerFileManager!!.moveFile(event.localState as Array<String>)
-                        drawerViewManager.refreshView()
+                        if (drawerFileManager!!.moveFile(event.localState as Array<String>)) {
+                            viewManager.refreshView()
+                            drawerViewManager.refreshView()
+                            return@setOnDragListener true
+                        } else {
+                            return@setOnDragListener false
+                        }
                     }
                     DragEvent.ACTION_DRAG_ENDED -> {
                         try {
@@ -142,11 +202,46 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                         } catch (e: NullPointerException) {
                             e.printStackTrace()
                         }
-                        drawerViewManager.refreshView()
                     }
                 }
                 return@setOnDragListener true
             }
+            drawer.addDrawerListener(object: DrawerLayout.DrawerListener {
+                override fun onDrawerSlide(drawerView: View, slideOffset: Float) {
+                }
+
+                override fun onDrawerOpened(drawerView: View) {
+                    toolbar.title = if (drawerFileManager!!.isCurrentRoot()) {
+                        getString(R.string.app_name)
+                    } else {
+                        drawerFileManager!!.mCurrentFolder
+                    }
+                }
+
+                override fun onDrawerClosed(drawerView: View) {
+                    toolbar.title = if (fileManager!!.isCurrentRoot()) {
+                        getString(R.string.app_name)
+                    } else {
+                        fileManager!!.mCurrentFolder
+                    }
+                }
+
+                override fun onDrawerStateChanged(newState: Int) {
+                }
+
+            })
+            seekBar.setOnSeekBarChangeListener( object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
+                    viewManager.columnCount = seekBar.progress
+                    viewManager.refreshView()
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar) {
+                }
+
+                override fun onStopTrackingTouch(seekBar: SeekBar) {
+                }
+            })
             refreshLayout.setOnRefreshListener {
                 viewManager.refreshView()
                 refreshLayout.isRefreshing = false
@@ -226,6 +321,8 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                     } else {
                         mBinding!!.toolbar.title = drawerFileManager!!.mCurrentFolder
                     }
+                } else {
+                    mBinding!!.drawer.close()
                 }
             }
         } else {
@@ -269,18 +366,18 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         }
     }
 
-    private var portraitColumns = 3
-    private var landscapeColumns = 6
+    private lateinit var viewColumnSaver: ViewColumnSaver
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         when (newConfig.orientation) {
             Configuration.ORIENTATION_PORTRAIT -> {
-                landscapeColumns = mBinding!!.seekBar.progress
-                mBinding!!.seekBar.progress = portraitColumns
+                viewColumnSaver.landscapeColumns = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = viewColumnSaver.portraitColumns
             }
             Configuration.ORIENTATION_LANDSCAPE -> {
-                portraitColumns = mBinding!!.seekBar.progress
-                mBinding!!.seekBar.progress = landscapeColumns
+                viewColumnSaver.portraitColumns = mBinding!!.seekBar.progress
+                mBinding!!.seekBar.progress = viewColumnSaver.landscapeColumns
             }
         }
     }

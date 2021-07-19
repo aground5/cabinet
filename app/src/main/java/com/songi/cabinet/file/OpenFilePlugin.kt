@@ -1,24 +1,21 @@
 package com.songi.cabinet.file
 
-import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
 import com.songi.cabinet.BuildConfig
 import java.io.File
-import java.nio.file.Files
 
 object OpenFilePlugin {
     fun intentFileOpen(path: String, fileName: String, context: Context) {
         var intent = Intent()
         var file = File(path, fileName)
         var uri: Uri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileProvider", file)
-        intent.setAction(android.content.Intent.ACTION_VIEW)
-        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.action = Intent.ACTION_VIEW
+        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         intent.setDataAndType(uri, MimeTypeMap.getSingleton().getExtensionFromMimeType(file.extension))
 
         startActivity(context, intent, null)

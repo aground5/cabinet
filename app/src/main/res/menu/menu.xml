@@ -6,7 +6,8 @@
         android:icon="@drawable/ic_search_black_24dp"
         android:title="@string/bar_search"
         app:actionViewClass="android.widget.SearchView"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="ifRoom"
+        android:visible="false"/>   <!--TODO-->
     <item
         android:id="@+id/app_bar_switch"
         android:title="Switch"
@@ -17,7 +18,7 @@
         android:icon="@drawable/ic_tick_box"
         android:title="@string/bar_multi_select"
         android:visible="false"
-        app:showAsAction="never" />
+        app:showAsAction="never" /><!--TODO-->
     <item
         android:id="@+id/app_bar_create_folder"
         android:title="@string/bar_create_folder"
@@ -30,6 +31,6 @@
         android:id="@+id/app_bar_settings"
         android:title="@string/bar_settings"
         android:visible="false"
-        app:showAsAction="never" />
+        app:showAsAction="never" /><!--TODO-->
 
 </menu>
