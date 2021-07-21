@@ -25,6 +25,8 @@ import com.songi.cabinet.Constants.EXTEND_SPACE_ALPHA
 import com.songi.cabinet.Constants.FOLDER_CLIPBOARD
 import com.songi.cabinet.Constants.FOLDER_USER
 import com.songi.cabinet.Constants.PERMISSION_READ_EXTERNAL_STORAGE
+import com.songi.cabinet.Constants.TAG_CONTENT
+import com.songi.cabinet.Constants.TAG_DRAWER
 import com.songi.cabinet.Constants.TIME_INTERVAL
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
@@ -33,6 +35,10 @@ import com.songi.cabinet.view.ImageThumbnailSaver
 import com.songi.cabinet.view.ThumbnailRenderThread
 import com.songi.cabinet.view.ViewColumnSaver
 import com.songi.cabinet.view.ViewManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.util.ArrayList
 
 class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
@@ -69,14 +75,14 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         viewColumnSaver = ViewColumnSaver()
 
 
-        fileManager = FileManager("CONTENT", this, "${filesDir}/$FOLDER_USER", this, refreshViewRequester)
-        viewManager = ViewManager("CONTENT", fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester, imageThumbnailSaver)
+        fileManager = FileManager(TAG_CONTENT, this, "${filesDir}/$FOLDER_USER", this, refreshViewRequester)
+        viewManager = ViewManager(TAG_CONTENT, fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester, imageThumbnailSaver)
         viewManager.refreshView()
-        drawerFileManager = FileManager("DRAWER", this, "${filesDir}/$FOLDER_CLIPBOARD", this, refreshViewRequester)
+        drawerFileManager = FileManager(TAG_DRAWER, this, "${filesDir}/$FOLDER_CLIPBOARD", this, refreshViewRequester)
 
         importAction()
 
-        drawerViewManager = ViewManager("DRAWER", drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true, refreshViewRequester, imageThumbnailSaver)
+        drawerViewManager = ViewManager(TAG_DRAWER, drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true, refreshViewRequester, imageThumbnailSaver)
         drawerViewManager.columnCount = 1
         drawerViewManager.refreshView()
 
@@ -266,12 +272,20 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                 }
             })
             refreshLayout.setOnRefreshListener {
-                viewManager.refreshView()
-                refreshLayout.isRefreshing = false
+                CoroutineScope(Dispatchers.Main).launch {
+                    CoroutineScope(Dispatchers.Main).async {
+                        viewManager.refreshView()
+                    }.await()
+                    refreshLayout.isRefreshing = false
+                }
             }
             drawerRefreshLayout.setOnRefreshListener {
-                drawerViewManager.refreshView()
-                drawerRefreshLayout.isRefreshing = false
+                CoroutineScope(Dispatchers.Main).launch {
+                    CoroutineScope(Dispatchers.Main).async {
+                        drawerViewManager.refreshView()
+                    }.await()
+                    drawerRefreshLayout.isRefreshing = false
+                }
             }
             /*contentScrollable.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
                 viewManager.thumbnailRenderThread.interrupt()
@@ -311,23 +325,18 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                     }
                 } else {
                     (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let { uri ->
-                        fileManager!!.importFile(uri)
+                        drawerFileManager!!.importFile(uri)
                     }
                 }
                 mBinding!!.drawer.open()
             }
             Intent.ACTION_SEND_MULTIPLE -> {
                 intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
-                    fileManager!!.importFile(it as ArrayList<Uri>)
+                    drawerFileManager!!.importFile(it as ArrayList<Uri>)
                 }
                 mBinding!!.drawer.open()
             }
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        viewManager.refreshView()
     }
 
     private fun checkPermission() {

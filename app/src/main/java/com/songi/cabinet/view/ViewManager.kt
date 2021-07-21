@@ -74,66 +74,81 @@ class ViewManager(private val tag: String,
         objectImageList = mutableListOf()
         val arFiles = fileManager.refreshFile(viewHidden)
         contentObjectContainer.removeAllViews()
-
+        var objects = mutableListOf<LinearLayout>()
         var linearLayout = LinearLayout(context)
-        for (i in arFiles.indices) {
-            if (i % columnCount == 0) {
-                if (i != 0) {
-                    contentObjectContainer.addView(linearLayout)
-                }
-                linearLayout = LinearLayout(context)
-                val layoutParams2 = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-                linearLayout.layoutParams = layoutParams2
-                linearLayout.orientation = LinearLayout.HORIZONTAL
-                linearLayout.gravity = Gravity.CENTER
+        CoroutineScope(Dispatchers.Main).launch {
+            for (i in arFiles.indices) {
+                CoroutineScope(Dispatchers.Main).async {
+                    val file = File(fileManager.mCurrent, arFiles[i])
+                    /**
+                     * 파일의 종류를 구분합니다. 현재는 디렉토리, 파일 두 종류로만 구분짓습니다.
+                     */
+                    objects.add(
+                        if (file.isDirectory) {
+                            createObject(OBJECT_DIR, file)
+                        } else {
+                            val mimeType =
+                                MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
+                            if (mimeType?.contains("image/", true) == true) {
+                                createObject(OBJECT_IMAGE, file)
+                            } else if (mimeType?.contains("video/", true) == true) {
+                                createObject(OBJECT_VIDEO, file)
+                            } else {
+                                when (file.extension.lowercase(Locale.getDefault())) {  // TODO: 계속 종류 구분 늘이기
+                                    "pdf" -> createObject(OBJECT_PDF, file)
+                                    "txt" -> createObject(OBJECT_TEXT, file)
+                                    "xlsx", "xls", "csv" -> createObject(OBJECT_EXCEL, file)
+                                    "pptx", "ppt", "pps" -> createObject(OBJECT_PPT, file)
+                                    "doc", "docx" -> createObject(OBJECT_WORD, file)
+                                    else -> createObject(OBJECT_FILE, file)
+                                }
+                            }
+                        }
+                    )
+                }.await()
             }
-            val file = File(fileManager.mCurrent, arFiles[i])
-            /**
-             * 파일의 종류를 구분합니다. 현재는 디렉토리, 파일 두 종류로만 구분짓습니다.
-             */
-            if (file.isDirectory) {
-                createObject(OBJECT_DIR, file, linearLayout)
-            }
-            val mimeTypeMap = MimeTypeMap.getSingleton()
-            mimeTypeMap.getMimeTypeFromExtension(file.extension)?.also {
-                if (it.contains("image/", true)) {
-                    createObject(OBJECT_IMAGE, file, linearLayout)
-                } else if (it.contains("video/", true)) {
-                    createObject(OBJECT_VIDEO, file, linearLayout)
-                } else {
-                    when (file.extension.lowercase(Locale.getDefault())) {  // TODO: 계속 종류 구분 늘이기
-                        "pdf" -> createObject(OBJECT_PDF, file, linearLayout)
-                        "txt" -> createObject(OBJECT_TEXT, file, linearLayout)
-                        "xlsx", "xls", "csv" -> createObject(OBJECT_EXCEL, file, linearLayout)
-                        "pptx", "ppt", "pps" -> createObject(OBJECT_PPT, file, linearLayout)
-                        "doc", "docx" -> createObject(OBJECT_WORD, file, linearLayout)
-                        else -> createObject(OBJECT_FILE, file, linearLayout)
+
+            for (i in arFiles.indices) {
+                if (i % columnCount == 0) {
+                    if (i != 0) {
+                        contentObjectContainer.addView(linearLayout)
                     }
+                    linearLayout = LinearLayout(context)
+                    val layoutParams2 = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                    linearLayout.layoutParams = layoutParams2
+                    linearLayout.orientation = LinearLayout.HORIZONTAL
+                    linearLayout.gravity = Gravity.CENTER
                 }
+                val file = File(fileManager.mCurrent, arFiles[i])
+                /**
+                 * 파일의 종류를 구분합니다. 현재는 디렉토리, 파일 두 종류로만 구분짓습니다.
+                 */
+                linearLayout.addView(objects[i])
+            }
+
+            repeat((columnCount - arFiles.size % columnCount) % columnCount) {
+                linearLayout.addView(createObject(OBJECT_BLANK))
             }
 
 
-        }
-        repeat((columnCount - arFiles.size % columnCount) % columnCount) {
-            createObject(OBJECT_BLANK, linearLayout)
-        }
-        contentObjectContainer.addView(linearLayout)
+            contentObjectContainer.addView(linearLayout)
 
-        thumbnailRenderThread.interrupt()
-        thumbnailRenderThread = ThumbnailRenderThread(objectImageList)
-        thumbnailRenderThread.list = objectImageList
-        try {
-            thumbnailRenderThread.start()
-        } catch (e: IllegalThreadStateException) {
-            e.printStackTrace()
+            thumbnailRenderThread.interrupt()
+            thumbnailRenderThread = ThumbnailRenderThread(objectImageList)
+            thumbnailRenderThread.list = objectImageList
+            try {
+                thumbnailRenderThread.start()
+            } catch (e: IllegalThreadStateException) {
+                e.printStackTrace()
+            }
         }
     }
 
     @DelicateCoroutinesApi
-    private fun createObject(objectType: Int, file: File, parentLinear: LinearLayout) {
+    private fun createObject(objectType: Int, file: File): LinearLayout {
         /**
          * 오브젝트의 크기를 결정짓는 linearLayout입니다. 여기에 imageView, popupLinearlayout이 추가되어 최종 parentLinear에 들어갑니다.
          */
@@ -282,7 +297,7 @@ class ViewManager(private val tag: String,
                         when (items.itemId) {          // TODO:메뉴 아이템 추가
                             R.id.popup_delete -> {
                                 if (fileManager.removeSingleFile(objectType, file.name)) {
-                                    refreshView()
+                                    linearLayout.visibility = LinearLayout.GONE
                                 } else if (objectType == OBJECT_DIR) {
                                     AlertDialog.Builder(context).apply {
                                         setTitle(R.string.remove_file_alert)
@@ -320,7 +335,6 @@ class ViewManager(private val tag: String,
                             }
                             R.id.popup_copy_to_clipboard -> {
                                 fileManager.copyFileToClipboard(file.name)
-                                refreshView()
                             }
                             R.id.popup_hidden -> {
                                 fileManager.switchHiddenAttrib(file.name)
@@ -359,10 +373,10 @@ class ViewManager(private val tag: String,
             return@setOnLongClickListener true
         }
 
-        parentLinear.addView(linearLayout)
+        return linearLayout
     }
 
-    private fun createObject(objectType: Int, parentLinear: LinearLayout) {
+    private fun createObject(objectType: Int): LinearLayout {
         if (objectType != OBJECT_BLANK) {
             throw IllegalArgumentException()
         }
@@ -394,6 +408,6 @@ class ViewManager(private val tag: String,
         linearLayout.addView(imageView)
         linearLayout.addView(textView)
 
-        parentLinear.addView(linearLayout)
+        return linearLayout
     }
 }
