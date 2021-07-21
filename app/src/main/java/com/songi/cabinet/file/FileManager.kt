@@ -6,12 +6,16 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import android.view.View
 import android.widget.ProgressBar
 import androidx.core.view.setPadding
 import androidx.lifecycle.LifecycleOwner
 import androidx.work.*
 import com.songi.cabinet.Constants
+import com.songi.cabinet.Constants.FOLDER_CLIPBOARD
 import com.songi.cabinet.Constants.OBJECT_IMAGE
+import com.songi.cabinet.Constants.TAG_CONTENT
+import com.songi.cabinet.Constants.TAG_DRAWER
 import com.songi.cabinet.R
 import com.songi.cabinet.file.ThumbnailTranslator.getThumbnailFile
 import kotlinx.coroutines.*
@@ -164,7 +168,8 @@ class FileManager(private val tag: String,
             setMessage("")
             setCancelable(false)
             setPositiveButton(R.string.positive) { dialog, which ->
-                refreshViewRequester.request(tag)
+                refreshViewRequester.request(TAG_DRAWER)
+                refreshViewRequester.request(TAG_CONTENT)
             }
         }.create()
         val thread = CopyThread(context, inputPath, outputPath, size, progressBar, alertDialog)
@@ -173,6 +178,7 @@ class FileManager(private val tag: String,
         }
         thread.start()
         alertDialog.show()
+        alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).visibility = View.GONE
     }
 
     private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
@@ -187,7 +193,7 @@ class FileManager(private val tag: String,
             setMessage("")
             setCancelable(false)
             setPositiveButton(R.string.positive) { dialog, which ->
-                refreshViewRequester.request(tag)
+                refreshViewRequester.request(TAG_DRAWER)    // TODO: 클립보드로 복사. 하드코딩 됨
             }
         }.create()
         val thread = CopyThread(context, arrayListOf(inputPath), arrayListOf(outputPath), arrayListOf(size), progressBar, alertDialog)
@@ -218,8 +224,8 @@ class FileManager(private val tag: String,
 
     fun moveFileToClipboard(fileName: String) : Boolean {
         val file = File(mCurrent, fileName)
-        val result = file.renameTo(File("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)))
-        refreshViewRequester.request("DRAWER")
+        val result = file.renameTo(File("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", isFileExists("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", fileName)))
+        refreshViewRequester.request(TAG_DRAWER)
         return result
     }
 
@@ -236,12 +242,11 @@ class FileManager(private val tag: String,
         val inputFile = File(mCurrent, fileName)
         try {
             copyWithBuffer(arrayOf(mCurrent, fileName),
-                arrayOf("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)),
+                arrayOf("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", isFileExists("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", fileName)),
                 inputFile.length())
         } catch (e: IOException) {
             e.printStackTrace()
         }
-        refreshViewRequester.request("DRAWER")
     }
 
     fun renameFile(origFileName: String, newFileName: String) {
@@ -304,11 +309,11 @@ class FileManager(private val tag: String,
         {
             if (file.exists()) {
                 var i: Int = 1
-                while (File(filePath, "$fileName ($i)").exists()) {
+                while (File(filePath, "$fileName($i)").exists()) {
                     i++
                 }
-                Log.d(TAG, "$fileName ($i)")
-                return "$fileName ($i)"
+                Log.d(TAG, "$fileName($i)")
+                return "$fileName($i)"
             } else {
                 Log.d(TAG, fileName)
                 return fileName
@@ -318,11 +323,11 @@ class FileManager(private val tag: String,
         val fileTypeStr = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length)
         if (file.exists()) {
             var i: Int = 1
-            while (File(filePath, "$fileNameOnly ($i).$fileTypeStr").exists()) {
+            while (File(filePath, "$fileNameOnly($i).$fileTypeStr").exists()) {
                 i++
             }
-            Log.d(TAG, "$fileNameOnly ($i).$fileTypeStr")
-            return "$fileNameOnly ($i).$fileTypeStr"
+            Log.d(TAG, "$fileNameOnly($i).$fileTypeStr")
+            return "$fileNameOnly($i).$fileTypeStr"
         } else {
             Log.d(TAG, fileName)
             return fileName

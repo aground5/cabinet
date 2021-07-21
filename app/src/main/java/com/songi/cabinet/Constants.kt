@@ -3,6 +3,8 @@ package com.songi.cabinet
 object Constants {
     var filesDir: String? = null
     val PACKAGE_NAME = "com.songi.cabinet"
+    val TAG_CONTENT = "CONTENT"
+    val TAG_DRAWER = "DRAWER"
 
     // 상수
     val IMAGEVIEW_ALPHA = 0.5f
