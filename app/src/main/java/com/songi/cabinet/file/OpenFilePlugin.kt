@@ -15,7 +15,7 @@ object OpenFilePlugin {
         var file = File(path, fileName)
         var uri: Uri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileProvider", file)
         intent.action = Intent.ACTION_VIEW
-        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
         intent.setDataAndType(uri, MimeTypeMap.getSingleton().getExtensionFromMimeType(file.extension))
 
         startActivity(context, intent, null)
