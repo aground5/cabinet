@@ -1,32 +1,25 @@
 package com.songi.cabinet.file
 
 import android.app.AlertDialog
-import android.app.Dialog
 import android.content.Context
-import android.content.DialogInterface
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
-import android.view.View
 import android.widget.ProgressBar
 import androidx.core.view.setPadding
 import androidx.lifecycle.LifecycleOwner
 import androidx.work.*
 import com.songi.cabinet.Constants
-import com.songi.cabinet.Constants.COPY_BUILDER
-import com.songi.cabinet.Constants.COPY_PROGRESS
 import com.songi.cabinet.Constants.OBJECT_IMAGE
 import com.songi.cabinet.R
 import com.songi.cabinet.file.ThumbnailTranslator.getThumbnailFile
 import kotlinx.coroutines.*
 import java.io.*
 import java.text.Collator
-import java.text.DecimalFormat
 import java.util.*
-import kotlin.math.floor
-import kotlin.math.ln
-import kotlin.math.pow
+import java.util.concurrent.Executor
+import kotlin.collections.ArrayList
 
 class FileManager(private val tag: String,
                   private val context: Context,
@@ -94,16 +87,44 @@ class FileManager(private val tag: String,
             e.printStackTrace()
         }
     }
-    
+
+    fun importFile(uris: ArrayList<Uri>) {
+        val filesInfo = arrayListOf<Array<String?>>()
+
+        for (uri in uris) {
+            filesInfo.add(getFileName(uri))
+        }
+        val inputPathList = arrayListOf<Array<String?>>()
+        val outputPathList = arrayListOf<Array<String>>()
+        val sizeList = arrayListOf<Long>()
+
+        for (i in filesInfo.indices) {
+            if (filesInfo[i][1] == null) {
+                inputPathList.add(arrayOf(null, uris[i].toString()))
+                outputPathList.add(arrayOf(mCurrent, isFileExists(mCurrent, filesInfo[i][0]!!)))
+                sizeList.add(0L)
+            } else {
+                inputPathList.add(arrayOf(null, uris[i].toString()))
+                outputPathList.add(arrayOf(mCurrent, isFileExists(mCurrent, filesInfo[i][0]!!)))
+                sizeList.add(filesInfo[i][1]!!.toLong())
+            }
+        }
+        copyWithBuffer(inputPathList, outputPathList, sizeList)
+    }
+
     fun importFile(uri: Uri) {
         val fileInfo = getFileName(uri)
+
+        if (fileInfo[0] == null) {
+            // TODO: 파일 이름 지정하라고 창 띄우기
+        }
         if (fileInfo[1] == null) {
             copyWithBuffer(arrayOf(null, uri.toString()),
-                arrayOf(mCurrent, isFileExists(mCurrent, fileInfo?.get(0)!!)),
+                arrayOf(mCurrent, isFileExists(mCurrent, fileInfo[0]!!)),
                 0)
         } else {
             copyWithBuffer(arrayOf(null, uri.toString()),
-                arrayOf(mCurrent, isFileExists(mCurrent, fileInfo?.get(0)!!)),
+                arrayOf(mCurrent, isFileExists(mCurrent, fileInfo[0]!!)),
                 fileInfo[1]!!.toLong())
         }
     }
@@ -131,100 +152,50 @@ class FileManager(private val tag: String,
         return result
     }
 
-    val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-        max = 200
-        isIndeterminate = false
-        setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
-    }
-    val alertDialog = AlertDialog.Builder(context).apply {
-        setTitle("파일 복사하는 중...")
-        setView(progressBar)
-        setMessage("")
-        setCancelable(false)
-        setPositiveButton(R.string.positive) { dialog, which ->
-            refreshViewRequester.request(tag)
+    private fun copyWithBuffer(inputPath: ArrayList<Array<String?>>, outputPath: ArrayList<Array<String>>, size: ArrayList<Long>) {
+        val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 200
+            isIndeterminate = false
+            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
         }
-    }.create()
+        val alertDialog = AlertDialog.Builder(context).apply {
+            setTitle(R.string.copying_files)
+            setView(progressBar)
+            setMessage("")
+            setCancelable(false)
+            setPositiveButton(R.string.positive) { dialog, which ->
+                refreshViewRequester.request(tag)
+            }
+        }.create()
+        val thread = CopyThread(context, inputPath, outputPath, size, progressBar, alertDialog)
+        alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, context.getString(R.string.negative)) {dialog, which ->
+            thread.interrupt()
+        }
+        thread.start()
+        alertDialog.show()
+    }
+
     private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
-        val data = Data.Builder()
-            .putAll(mapOf("inputPath" to inputPath, "outputPath" to outputPath, "size" to size))
-            .build()
-        val copyBuilder = OneTimeWorkRequestBuilder<CopyWorker>()
-        copyBuilder.setInputData(data)
-        copyBuilder.addTag(COPY_BUILDER)
-        val copyWorker = copyBuilder.build()
-        WorkManager.getInstance(context).enqueueUniqueWork(COPY_BUILDER, ExistingWorkPolicy.APPEND,copyWorker)
-
-        alertDialog.setButton(
-            Dialog.BUTTON_NEGATIVE,
-            context.getString(R.string.negative)
-        ) { dialog, which ->
-            WorkManager.getInstance(context).cancelUniqueWork(COPY_BUILDER)
-            File(outputPath[0], outputPath[1]).delete()
+        val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 200
+            isIndeterminate = false
+            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
         }
-
-        WorkManager.getInstance(context)
-            .getWorkInfoByIdLiveData(copyWorker.id)
-            .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: WorkInfo? ->
-                if (workInfo != null) {
-                    when (workInfo.state) {
-                        WorkInfo.State.ENQUEUED -> Log.d(TAG, "WorkInfo.State.ENQUEUED")
-                        WorkInfo.State.RUNNING -> {
-                            Log.d(TAG, "WorkInfo.State.RUNNING")
-                            val copiedSize = workInfo.progress.getLong(COPY_PROGRESS, 0)
-                            Log.d(TAG, "progress : $copiedSize")
-
-                            val percentage = if (size == 0L) {
-                                0
-                            } else {
-                                (copiedSize / (size / 200)).toInt()
-                            }
-                            progressBar.setProgress(percentage, true)
-
-                            alertDialog.setMessage(
-                                "${outputPath[1]}\n${byteCalculation(copiedSize)} / ${
-                                    byteCalculation(
-                                        size
-                                    )
-                                }"
-                            )
-                            alertDialog.show()
-                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
-                        }
-                        WorkInfo.State.SUCCEEDED -> {
-                            Log.d(TAG, "WorkInfo.State.SUCCEEDED")
-                            progressBar.setProgress(200, true)
-                            if (size == 0L) {
-                                alertDialog.setMessage("${outputPath[1]}\n${context.getString(R.string.finish_copy)}")
-                            } else {
-                                alertDialog.setMessage(
-                                    "${outputPath[1]}\n${byteCalculation(size)} / ${
-                                        byteCalculation(
-                                            size
-                                        )
-                                    }"
-                                )
-                            }
-                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.VISIBLE
-                        }
-                    }
-                }
-            })
-    }
-
-    fun byteCalculation(bytes: Long): String? {
-        var retFormat = "0"
-        val size = bytes.toDouble()
-        val s = arrayOf("bytes", "KB", "MB", "GB", "TB", "PB")
-        if (bytes != 0L) {
-            val idx = floor(ln(size) / ln(1024.0)).toInt()
-            val df = DecimalFormat("#,###.##")
-            val ret = size / 1024.0.pow(floor(idx.toDouble()))
-            retFormat = df.format(ret).toString() + " " + s[idx]
-        } else {
-            retFormat += " " + s[0]
+        val alertDialog = AlertDialog.Builder(context).apply {
+            setTitle(R.string.copying_files)
+            setView(progressBar)
+            setMessage("")
+            setCancelable(false)
+            setPositiveButton(R.string.positive) { dialog, which ->
+                refreshViewRequester.request(tag)
+            }
+        }.create()
+        val thread = CopyThread(context, arrayListOf(inputPath), arrayListOf(outputPath), arrayListOf(size), progressBar, alertDialog)
+        alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, context.getString(R.string.negative)) {dialog, which ->
+            thread.interrupt()
         }
-        return retFormat
+        alertDialog.show()
+        thread.start()
     }
 
     fun moveFile(filePath: Array<String>): Boolean {
@@ -252,7 +223,7 @@ class FileManager(private val tag: String,
         return result
     }
 
-    
+
     fun copyFile(origFilePath: Array<String>) {
         val inputFile = File(origFilePath[0], origFilePath[1])
         copyWithBuffer(arrayOf(origFilePath[0], origFilePath[1]),
@@ -260,12 +231,12 @@ class FileManager(private val tag: String,
             inputFile.totalSpace)
     }
 
-    
+
     fun copyFileToClipboard(fileName: String) {
         val inputFile = File(mCurrent, fileName)
         try {
             copyWithBuffer(arrayOf(mCurrent, fileName),
-                    arrayOf("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)),
+                arrayOf("${context.filesDir.absolutePath}/Cabinet_temp_folder", isFileExists("${context.filesDir.absolutePath}/Cabinet_temp_folder", fileName)),
                 inputFile.length())
         } catch (e: IOException) {
             e.printStackTrace()

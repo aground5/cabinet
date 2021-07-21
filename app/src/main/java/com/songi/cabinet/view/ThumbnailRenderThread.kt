@@ -45,7 +45,7 @@ class ThumbnailRenderThread (list: MutableList<Pair<LottieAnimationView, File>>)
                         Log.d(TAG, "${list[i].second.name} rendered.")
                     }
                 } else {
-                    Log.d(TAG, "${list[i].second.name} is already rendered.")
+                    //Log.d(TAG, "${list[i].second.name} is already rendered.")
                 }
             }
             try {

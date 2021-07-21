@@ -8,6 +8,10 @@ import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
 import com.songi.cabinet.BuildConfig
 import java.io.File
+import java.text.DecimalFormat
+import kotlin.math.floor
+import kotlin.math.ln
+import kotlin.math.pow
 
 object OpenFilePlugin {
     fun intentFileOpen(path: String, fileName: String, context: Context) {
@@ -19,6 +23,21 @@ object OpenFilePlugin {
         intent.setDataAndType(uri, MimeTypeMap.getSingleton().getExtensionFromMimeType(file.extension))
 
         startActivity(context, intent, null)
+    }
+
+    fun byteCalculation(bytes: Long): String? {
+        var retFormat = "0"
+        val size = bytes.toDouble()
+        val s = arrayOf("bytes", "KB", "MB", "GB", "TB", "PB")
+        if (bytes != 0L) {
+            val idx = floor(ln(size) / ln(1024.0)).toInt()
+            val df = DecimalFormat("#,###.##")
+            val ret = size / 1024.0.pow(floor(idx.toDouble()))
+            retFormat = df.format(ret).toString() + " " + s[idx]
+        } else {
+            retFormat += " " + s[0]
+        }
+        return retFormat
     }
 
     @Deprecated("Use getExtensionFromMimeType() instead.")

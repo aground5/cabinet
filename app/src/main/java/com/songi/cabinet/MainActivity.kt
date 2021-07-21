@@ -33,6 +33,7 @@ import com.songi.cabinet.view.ImageThumbnailSaver
 import com.songi.cabinet.view.ThumbnailRenderThread
 import com.songi.cabinet.view.ViewColumnSaver
 import com.songi.cabinet.view.ViewManager
+import java.util.ArrayList
 
 class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     private val TAG = "MainActivity"
@@ -317,9 +318,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
             }
             Intent.ACTION_SEND_MULTIPLE -> {
                 intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
-                    for( i in it ) {
-                        fileManager!!.importFile(i as Uri)
-                    }
+                    fileManager!!.importFile(it as ArrayList<Uri>)
                 }
                 mBinding!!.drawer.open()
             }
