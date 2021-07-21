@@ -116,7 +116,7 @@ class FileManager(private val tag: String,
         copyWithBuffer(inputPathList, outputPathList, sizeList)
     }
 
-    fun importFile(uri: Uri) {
+    fun importFile(uri: Uri, refreshTag: String) {
         val fileInfo = getFileName(uri)
 
         if (fileInfo[0] == null) {
@@ -125,11 +125,11 @@ class FileManager(private val tag: String,
         if (fileInfo[1] == null) {
             copyWithBuffer(arrayOf(null, uri.toString()),
                 arrayOf(mCurrent, isFileExists(mCurrent, fileInfo[0]!!)),
-                0)
+                0, refreshTag)
         } else {
             copyWithBuffer(arrayOf(null, uri.toString()),
                 arrayOf(mCurrent, isFileExists(mCurrent, fileInfo[0]!!)),
-                fileInfo[1]!!.toLong())
+                fileInfo[1]!!.toLong(), refreshTag)
         }
     }
 
@@ -181,7 +181,7 @@ class FileManager(private val tag: String,
         alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).visibility = View.GONE
     }
 
-    private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
+    private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long, refreshTag: String) {
         val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 200
             isIndeterminate = false
@@ -193,7 +193,7 @@ class FileManager(private val tag: String,
             setMessage("")
             setCancelable(false)
             setPositiveButton(R.string.positive) { dialog, which ->
-                refreshViewRequester.request(TAG_DRAWER)    // TODO: 클립보드로 복사. 하드코딩 됨
+                refreshViewRequester.request(refreshTag)    // TODO: 클립보드로 복사. 하드코딩 됨
             }
         }.create()
         val thread = CopyThread(context, arrayListOf(inputPath), arrayListOf(outputPath), arrayListOf(size), progressBar, alertDialog)
@@ -234,7 +234,7 @@ class FileManager(private val tag: String,
         val inputFile = File(origFilePath[0], origFilePath[1])
         copyWithBuffer(arrayOf(origFilePath[0], origFilePath[1]),
             arrayOf(mCurrent, isFileExists(mCurrent, origFilePath[1])),
-            inputFile.totalSpace)
+            inputFile.totalSpace, TAG_CONTENT)
     }
 
 
@@ -243,7 +243,7 @@ class FileManager(private val tag: String,
         try {
             copyWithBuffer(arrayOf(mCurrent, fileName),
                 arrayOf("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", isFileExists("${context.filesDir.absolutePath}/$FOLDER_CLIPBOARD", fileName)),
-                inputFile.length())
+                inputFile.length(), TAG_DRAWER)
         } catch (e: IOException) {
             e.printStackTrace()
         }

@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data!!.also { uri ->
-                fileManager!!.importFile(uri)
+                fileManager!!.importFile(uri, TAG_CONTENT)
                 viewManager.refreshView()
             }
         }
@@ -325,7 +325,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                     }
                 } else {
                     (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let { uri ->
-                        drawerFileManager!!.importFile(uri)
+                        drawerFileManager!!.importFile(uri, TAG_DRAWER)
                     }
                 }
                 mBinding!!.drawer.open()
