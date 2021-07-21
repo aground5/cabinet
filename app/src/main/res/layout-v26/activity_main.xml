@@ -116,44 +116,44 @@
         app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
-<!--
+    <!--
     <TextView
         android:id="@+id/hint_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="화면 상단의 더보기 버튼을 눌러서\n 폴더를 만들거나 파일을 불러오세요!"
+        android:text="1. 화면 상단의 더보기 버튼을 눌러서\n 폴더를 만들거나 파일을 불러오세요!"
         android:textAlignment="center"
         app:layout_constraintBottom_toBottomOf="@+id/drawer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/toolbar" />
 
-    <TextView
+    <com.songi.cabinet.VerticalTextView
         android:id="@+id/hint_text2"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="드래그 앤 드롭한 상태로 상위 폴더로 가려면 이 영역에 올려놓으세요."
-        android:textAlignment="center"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/drawer" />
-
-    <com.songi.cabinet.VerticalTextView
-        android:id="@+id/hint_text3"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="화면 왼쪽 가장자리에서 가운데로 끌어 클립보드를 열어보세요."
+        android:text="2. 화면 왼쪽 가장자리에서 가운데로 끌어 클립보드를 열어보세요."
         android:gravity="bottom"
         app:layout_constraintTop_toTopOf="@+id/drawer"
         app:layout_constraintBottom_toBottomOf="@+id/drawer"
         app:layout_constraintStart_toStartOf="parent" />
 
     <TextView
+        android:id="@+id/hint_text3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="3. 드래그 앤 드롭한 상태로 상위 폴더로 가려면 이 영역에 올려놓으세요."
+        android:textAlignment="center"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/drawer" />
+
+    <TextView
         android:id="@+id/hint_text4"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="96dp"
-        android:text="숨김 파일\n 표시 / 숨기기"
+        android:text="4. 숨김 파일\n 표시 / 숨기기"
         android:textAlignment="center"
         app:layout_constraintTop_toTopOf="@+id/toolbar"
         app:layout_constraintBottom_toBottomOf="@+id/toolbar"
@@ -163,7 +163,7 @@
         android:id="@+id/hint_text5"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="화면에 보이는 파일 개수를 조정할 수 있습니다."
+        android:text="5. 화면에 보이는 파일 개수를 조정할 수 있습니다."
         app:layout_constraintBottom_toTopOf="@+id/seekBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -173,7 +173,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:text="폴더를 추가하면 힌트는 사라집니다"
+        android:text="6. 폴더를 추가하면 힌트는 사라집니다"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/hint_text3"
         app:layout_constraintStart_toStartOf="@+id/drawer"
@@ -184,6 +184,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:progress="3"
+        android:min="1"
         android:max="10"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

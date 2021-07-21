@@ -1,4 +1,4 @@
-package com.songi.cabinet
+package com.songi.cabinet.view
 
 import android.app.AlertDialog
 import android.content.ClipData
@@ -8,23 +8,40 @@ import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.*
+import android.webkit.MimeTypeMap
 import android.widget.*
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.core.view.setPadding
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.airbnb.lottie.LottieAnimationView
 import com.songi.cabinet.Constants.FOLDER_TIME_INTERVAL
 import com.songi.cabinet.Constants.IMAGEVIEW_ALPHA
 import com.songi.cabinet.Constants.OBJECT_BLANK
 import com.songi.cabinet.Constants.OBJECT_DIR
+import com.songi.cabinet.Constants.OBJECT_EXCEL
 import com.songi.cabinet.Constants.OBJECT_FILE
+import com.songi.cabinet.Constants.OBJECT_IMAGE
+import com.songi.cabinet.Constants.OBJECT_PDF
+import com.songi.cabinet.Constants.OBJECT_PPT
+import com.songi.cabinet.Constants.OBJECT_TEXT
+import com.songi.cabinet.Constants.OBJECT_VIDEO
+import com.songi.cabinet.Constants.OBJECT_WORD
+import com.songi.cabinet.Constants.RENDER_BUILDER
+import com.songi.cabinet.R
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.OpenFilePlugin
 import com.songi.cabinet.file.RefreshViewRequester
-import kotlinx.coroutines.DelicateCoroutinesApi
+import com.songi.cabinet.file.ThumbnailTranslator.getThumbnailFile
+import kotlinx.coroutines.*
 import java.io.File
 import java.lang.IllegalArgumentException
 import java.lang.NullPointerException
+import java.lang.Runnable
+import java.util.*
 
 class ViewManager(private val tag: String,
                   private val fileManager: FileManager,
@@ -32,10 +49,10 @@ class ViewManager(private val tag: String,
                   private val contentObjectContainer: LinearLayout,
                   private val toolbar: Toolbar,
                   private val isDrawer: Boolean,
-                  refreshViewRequester: RefreshViewRequester) {
+                  refreshViewRequester: RefreshViewRequester,
+                  private val imageThumbnailSaver: ImageThumbnailSaver) {
 
     private val TAG = "ViewManager"
-
     var viewHidden = false
     var columnCount = 3
     init {
@@ -46,10 +63,15 @@ class ViewManager(private val tag: String,
         }
     }
 
+    var objectImageList = mutableListOf<Pair<LottieAnimationView, File>>()
+    var thumbnailRenderThread = ThumbnailRenderThread(objectImageList)
+
     /**
      * 화면을 업데이트 합니다. columCount에 맞게 정렬됩니다.
      */
+    @DelicateCoroutinesApi
     fun refreshView() {
+        objectImageList = mutableListOf()
         val arFiles = fileManager.refreshFile(viewHidden)
         contentObjectContainer.removeAllViews()
 
@@ -73,20 +95,45 @@ class ViewManager(private val tag: String,
              * 파일의 종류를 구분합니다. 현재는 디렉토리, 파일 두 종류로만 구분짓습니다.
              */
             if (file.isDirectory) {
-                createObject(OBJECT_DIR, arFiles[i], linearLayout, file.isHidden)
-            } else {
-                createObject(OBJECT_FILE, arFiles[i], linearLayout, file.isHidden)
+                createObject(OBJECT_DIR, file, linearLayout)
             }
+            val mimeTypeMap = MimeTypeMap.getSingleton()
+            mimeTypeMap.getMimeTypeFromExtension(file.extension)?.also {
+                if (it.contains("image/", true)) {
+                    createObject(OBJECT_IMAGE, file, linearLayout)
+                } else if (it.contains("video/", true)) {
+                    createObject(OBJECT_VIDEO, file, linearLayout)
+                } else {
+                    when (file.extension.lowercase(Locale.getDefault())) {  // TODO: 계속 종류 구분 늘이기
+                        "pdf" -> createObject(OBJECT_PDF, file, linearLayout)
+                        "txt" -> createObject(OBJECT_TEXT, file, linearLayout)
+                        "xlsx", "xls", "csv" -> createObject(OBJECT_EXCEL, file, linearLayout)
+                        "pptx", "ppt", "pps" -> createObject(OBJECT_PPT, file, linearLayout)
+                        "doc", "docx" -> createObject(OBJECT_WORD, file, linearLayout)
+                        else -> createObject(OBJECT_FILE, file, linearLayout)
+                    }
+                }
+            }
+
+
         }
         repeat((columnCount - arFiles.size % columnCount) % columnCount) {
             createObject(OBJECT_BLANK, linearLayout)
         }
         contentObjectContainer.addView(linearLayout)
+
+        thumbnailRenderThread.interrupt()
+        thumbnailRenderThread = ThumbnailRenderThread(objectImageList)
+        thumbnailRenderThread.list = objectImageList
+        try {
+            thumbnailRenderThread.start()
+        } catch (e: IllegalThreadStateException) {
+            e.printStackTrace()
+        }
     }
 
     @DelicateCoroutinesApi
-    private fun createObject(objectType: Int, fileName: String, parentLinear: LinearLayout, isHidden: Boolean) {
-        var isHidden = isHidden
+    private fun createObject(objectType: Int, file: File, parentLinear: LinearLayout) {
         /**
          * 오브젝트의 크기를 결정짓는 linearLayout입니다. 여기에 imageView, popupLinearlayout이 추가되어 최종 parentLinear에 들어갑니다.
          */
@@ -107,15 +154,15 @@ class ViewManager(private val tag: String,
                 context.resources.getDimensionPixelSize(R.dimen.image_cubic_size),
                 context.resources.getDimensionPixelSize(R.dimen.image_cubic_size)
             )
-            contentDescription = fileName
+            contentDescription = file.name
             val outValue = TypedValue()
             context.theme.resolveAttribute(R.attr.selectableItemBackground, outValue, true)
             foreground = ContextCompat.getDrawable(context, outValue.resourceId)
 
             if (objectType == OBJECT_DIR) {
                 setOnClickListener {
-                    fileManager.goDir(fileName)
-                    toolbar.title = fileName
+                    fileManager.goDir(file.name)
+                    toolbar.title = file.name
                     refreshView()
                 }
                 setOnDragListener { v, event ->
@@ -128,16 +175,16 @@ class ViewManager(private val tag: String,
                         DragEvent.ACTION_DRAG_ENTERED -> {
                             setMaxProgress(0.5f)
                             playAnimation()
-                            Log.d(TAG, "imageView_$fileName: DRAG_ENTERED")
+                            Log.d(TAG, "imageView_$file.name: DRAG_ENTERED")
                             handler.postDelayed(Runnable {
-                                fileManager.goDir(fileName)
-                                toolbar.title = fileName
+                                fileManager.goDir(file.name)
+                                toolbar.title = file.name
                                 refreshView()
                             }, FOLDER_TIME_INTERVAL)
                         }
                         DragEvent.ACTION_DRAG_EXITED -> {
                             try {
-                                Log.d(TAG, "imageView_$fileName: DRAG_EXITED")
+                                Log.d(TAG, "imageView_$file.name: DRAG_EXITED")
                                 handler.removeCallbacksAndMessages(null)
                             } catch (e: NullPointerException) {
                                 e.printStackTrace()
@@ -147,7 +194,7 @@ class ViewManager(private val tag: String,
                         }
                         DragEvent.ACTION_DROP -> {
                             try {
-                                Log.d(TAG, "imageView_$fileName: DROP")
+                                Log.d(TAG, "imageView_$file.name: DROP")
                                 handler.removeCallbacksAndMessages(null)
                             } catch (e: NullPointerException) {
                                 e.printStackTrace()
@@ -165,17 +212,27 @@ class ViewManager(private val tag: String,
                 }
             } else {
                 setOnClickListener {
-                    OpenFilePlugin.intentFileOpen(fileManager.mCurrent, fileName, context)
+                    OpenFilePlugin.intentFileOpen(fileManager.mCurrent, file.name, context)
                 }
             }
 
             when (objectType) {     // TODO: 이미지, 동영상, PDF 등은 썸네일을 아이콘으로. 나머지는 아이콘 따로 제작하기. 후 버전에 있을 예정.
-                OBJECT_DIR -> {
-                    setAnimation(R.raw.animated_folder)
+                OBJECT_DIR -> setAnimation(R.raw.animated_folder)
+                OBJECT_IMAGE -> {
+                    setImageResource(R.drawable.ic_file)        // TODO: ic_image 로 바꾸기
+
+                    val thumbnailFile = getThumbnailFile(file)
+                    if (thumbnailFile.exists()) {
+                        val map = Pair(this, thumbnailFile)
+                        objectImageList.add(map)
+                    } else {
+                        imageThumbnailSaver.addImage(ImageThumbnailVO(file.name, file.absolutePath, isProcessed = false, this))
+                    }
                 }
                 OBJECT_FILE -> setImageResource(R.drawable.ic_file)
+                else -> setImageResource(R.drawable.ic_file)
             }
-            if (isHidden) {
+            if (file.isHidden) {
                 alpha = IMAGEVIEW_ALPHA
             }
         }
@@ -186,7 +243,7 @@ class ViewManager(private val tag: String,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             maxWidth = context.resources.getDimensionPixelSize(R.dimen.object_text_maxWidth)
-            text = fileName
+            text = file.name
             gravity = Gravity.CENTER_HORIZONTAL
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
@@ -218,19 +275,19 @@ class ViewManager(private val tag: String,
                     if (objectType == OBJECT_DIR) {
                         menu.findItem(R.id.popup_copy_to_clipboard).isVisible = false   // TODO: 복사기능 넣을것인지 말것인지 결졍.
                     }
-                    if (isHidden) {
+                    if (file.isHidden) {
                         menu.findItem(R.id.popup_hidden).setTitle(R.string.popup_show)
                     }
                     setOnMenuItemClickListener { items ->
                         when (items.itemId) {          // TODO:메뉴 아이템 추가
                             R.id.popup_delete -> {
-                                if (fileManager.removeSingleFile(fileName)) {
+                                if (fileManager.removeSingleFile(objectType, file.name)) {
                                     refreshView()
-                                } else {
+                                } else if (objectType == OBJECT_DIR) {
                                     AlertDialog.Builder(context).apply {
                                         setTitle(R.string.remove_file_alert)
                                         setPositiveButton(R.string.positive) { dialog, which ->
-                                            fileManager.removeRecursively(fileName)
+                                            fileManager.removeRecursively(file.name)
                                             refreshView()
                                         }
                                         setNegativeButton(R.string.negative) { dialog, which ->
@@ -242,13 +299,13 @@ class ViewManager(private val tag: String,
                             }
                             R.id.popup_rename -> {
                                 val newFileName = EditText(context).apply {
-                                    setText(fileName, TextView.BufferType.EDITABLE)
+                                    setText(file.name, TextView.BufferType.EDITABLE)
                                 }
                                 AlertDialog.Builder(context).apply {
                                     setTitle(R.string.rename_file_title)
                                     setView(newFileName)
                                     setPositiveButton(R.string.positive) { dialog, which ->
-                                        fileManager.renameFile(fileName, newFileName.text.toString())
+                                        fileManager.renameFile(file.name, newFileName.text.toString())
                                         refreshView()
                                     }
                                     setNegativeButton(R.string.negative) { dialog, which ->
@@ -258,15 +315,15 @@ class ViewManager(private val tag: String,
                             }
                             //R.id.popup_copy -> {} TODO : 복사 구현
                             R.id.popup_move_to_clipboard -> {
-                                fileManager.moveFileToClipboard(fileName)
+                                fileManager.moveFileToClipboard(file.name)
                                 refreshView()
                             }
                             R.id.popup_copy_to_clipboard -> {
-                                fileManager.copyFileToClipboard(fileName)
+                                fileManager.copyFileToClipboard(file.name)
                                 refreshView()
                             }
                             R.id.popup_hidden -> {
-                                fileManager.switchHiddenAttrib(fileName)
+                                fileManager.switchHiddenAttrib(file.name)
                                 refreshView()
                             }
                             else -> Toast.makeText(context, "We are trying to hard work!", Toast.LENGTH_SHORT).show()
@@ -292,10 +349,10 @@ class ViewManager(private val tag: String,
          */
         imageView.setOnLongClickListener { view ->
             val item = ClipData.Item(view.tag as? CharSequence)
-            Log.d(TAG, "imageView_$fileName: ${view.tag}")
+            Log.d(TAG, "imageView_$file.name: ${view.tag}")
             val dragData = ClipData(view.tag as? CharSequence, arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
             val myShadow = View.DragShadowBuilder(linearLayout)
-            val filePath: Array<String> = arrayOf(fileManager.mCurrent, fileName)
+            val filePath: Array<String> = arrayOf(fileManager.mCurrent, file.name)
             // linearLayout.visibility = LinearLayout.INVISIBLE // TODO: 유저 의견 반영 바람
             view.startDragAndDrop(dragData, myShadow, filePath, 0)
 

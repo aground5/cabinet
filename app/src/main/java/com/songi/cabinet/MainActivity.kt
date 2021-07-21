@@ -5,7 +5,10 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.content.res.Resources
+import android.graphics.Rect
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
@@ -19,13 +22,17 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.songi.cabinet.Constants.BACK_SPACE_TIME_INTERVAL
 import com.songi.cabinet.Constants.DRAWER_TIME_INTERVAL
 import com.songi.cabinet.Constants.EXTEND_SPACE_ALPHA
+import com.songi.cabinet.Constants.FOLDER_CLIPBOARD
+import com.songi.cabinet.Constants.FOLDER_USER
 import com.songi.cabinet.Constants.PERMISSION_READ_EXTERNAL_STORAGE
 import com.songi.cabinet.Constants.TIME_INTERVAL
 import com.songi.cabinet.databinding.ActivityMainBinding
 import com.songi.cabinet.file.FileManager
 import com.songi.cabinet.file.RefreshViewRequester
-import java.lang.NullPointerException
-
+import com.songi.cabinet.view.ImageThumbnailSaver
+import com.songi.cabinet.view.ThumbnailRenderThread
+import com.songi.cabinet.view.ViewColumnSaver
+import com.songi.cabinet.view.ViewManager
 
 class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
     private val TAG = "MainActivity"
@@ -52,22 +59,25 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
         super.onCreate(savedInstanceState)
         mBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.songi.cabinet.Constants.filesDir = filesDir.absolutePath
+
+        Log.d(TAG, Constants.filesDir!!)
 
         val refreshViewRequester = RefreshViewRequester()
+        val imageThumbnailSaver = ImageThumbnailSaver(applicationContext, this)
+        viewColumnSaver = ViewColumnSaver()
 
 
-        fileManager = FileManager("CONTENT", this, "${filesDir.absolutePath}/Cabinet_user_folder", this, refreshViewRequester)
-        viewManager = ViewManager("CONTENT", fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester)
+        fileManager = FileManager("CONTENT", this, "${filesDir}/$FOLDER_USER", this, refreshViewRequester)
+        viewManager = ViewManager("CONTENT", fileManager!!, this, binding.contentObjectContainer, binding.toolbar, isDrawer = false, refreshViewRequester, imageThumbnailSaver)
         viewManager.refreshView()
-        drawerFileManager = FileManager("DRAWER", this, "${filesDir.absolutePath}/Cabinet_temp_folder", this, refreshViewRequester)
+        drawerFileManager = FileManager("DRAWER", this, "${filesDir}/$FOLDER_CLIPBOARD", this, refreshViewRequester)
 
         importAction()
 
-        drawerViewManager = ViewManager("DRAWER", drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true, refreshViewRequester)
+        drawerViewManager = ViewManager("DRAWER", drawerFileManager!!, this, binding.drawerObjectContainer, binding.toolbar, isDrawer = true, refreshViewRequester, imageThumbnailSaver)
         drawerViewManager.columnCount = 1
         drawerViewManager.refreshView()
-
-        viewColumnSaver = ViewColumnSaver(filesDir.absolutePath)
 
         mBinding!!.apply {
             toolbar.setOnMenuItemClickListener { item ->
@@ -117,6 +127,15 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                     }
                     DragEvent.ACTION_DROP -> {
                         Log.d(TAG, "backSpace: DROP")
+                        return@setOnDragListener false
+                    }
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        backSpace.alpha = 0.0f
+                        try {
+                            backSpace.handler.removeCallbacksAndMessages(null)
+                        } catch (e: NullPointerException) {
+                            e.printStackTrace()
+                        }
                     }
                 }
 
@@ -232,6 +251,9 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
             })
             seekBar.setOnSeekBarChangeListener( object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
+                    if (Build.VERSION.SDK_INT < 26 && seekBar.progress == 0) {
+                        return
+                    }
                     viewManager.columnCount = seekBar.progress
                     viewManager.refreshView()
                 }
@@ -250,6 +272,25 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                 drawerViewManager.refreshView()
                 drawerRefreshLayout.isRefreshing = false
             }
+            /*contentScrollable.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+                viewManager.thumbnailRenderThread.interrupt()
+                try {
+                    viewManager.thumbnailRenderThread.start()
+                } catch (e: IllegalThreadStateException) {
+                    e.printStackTrace()
+                }
+                Log.d(TAG, "contentScrollable.setOnScrollChangeListener")
+            }
+            drawerScrollable.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+                drawerViewManager.thumbnailRenderThread.interrupt()
+                try {
+                    drawerViewManager.thumbnailRenderThread.start()
+                } catch (e: IllegalThreadStateException) {
+                    e.printStackTrace()
+                }
+
+                Log.d(TAG, "drawerScrollable.setOnScrollChangeListener")
+            }*/
         }
 
         findViewById<Switch>(R.id.view_hidden_toggle).setOnCheckedChangeListener { buttonView, isChecked ->
@@ -269,7 +310,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
                     }
                 } else {
                     (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let { uri ->
-                        drawerFileManager!!.importFile(uri)
+                        fileManager!!.importFile(uri)
                     }
                 }
                 mBinding!!.drawer.open()
@@ -277,7 +318,7 @@ class MainActivity : AppCompatActivity(), androidx.work.Configuration.Provider {
             Intent.ACTION_SEND_MULTIPLE -> {
                 intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
                     for( i in it ) {
-                        drawerFileManager!!.importFile(i as Uri)
+                        fileManager!!.importFile(i as Uri)
                     }
                 }
                 mBinding!!.drawer.open()

@@ -13,8 +13,12 @@ import android.widget.ProgressBar
 import androidx.core.view.setPadding
 import androidx.lifecycle.LifecycleOwner
 import androidx.work.*
+import com.songi.cabinet.Constants
+import com.songi.cabinet.Constants.COPY_BUILDER
 import com.songi.cabinet.Constants.COPY_PROGRESS
+import com.songi.cabinet.Constants.OBJECT_IMAGE
 import com.songi.cabinet.R
+import com.songi.cabinet.file.ThumbnailTranslator.getThumbnailFile
 import kotlinx.coroutines.*
 import java.io.*
 import java.text.Collator
@@ -127,65 +131,82 @@ class FileManager(private val tag: String,
         return result
     }
 
+    val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+        max = 200
+        isIndeterminate = false
+        setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
+    }
+    val alertDialog = AlertDialog.Builder(context).apply {
+        setTitle("파일 복사하는 중...")
+        setView(progressBar)
+        setMessage("")
+        setCancelable(false)
+        setPositiveButton(R.string.positive) { dialog, which ->
+            refreshViewRequester.request(tag)
+        }
+    }.create()
     private fun copyWithBuffer(inputPath: Array<String?>, outputPath: Array<String>, size: Long) {
         val data = Data.Builder()
             .putAll(mapOf("inputPath" to inputPath, "outputPath" to outputPath, "size" to size))
             .build()
         val copyBuilder = OneTimeWorkRequestBuilder<CopyWorker>()
         copyBuilder.setInputData(data)
-        copyBuilder.addTag("COPY_BUILDER")
+        copyBuilder.addTag(COPY_BUILDER)
         val copyWorker = copyBuilder.build()
-        WorkManager.getInstance(context).enqueue(copyWorker)
+        WorkManager.getInstance(context).enqueueUniqueWork(COPY_BUILDER, ExistingWorkPolicy.APPEND,copyWorker)
 
-        val progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 200
-            isIndeterminate = false
-            setPadding(context.resources.getDimensionPixelSize(R.dimen.progressbar_padding_size))
+        alertDialog.setButton(
+            Dialog.BUTTON_NEGATIVE,
+            context.getString(R.string.negative)
+        ) { dialog, which ->
+            WorkManager.getInstance(context).cancelUniqueWork(COPY_BUILDER)
+            File(outputPath[0], outputPath[1]).delete()
         }
-        val alertDialog = AlertDialog.Builder(context).apply {
-            setTitle("파일 복사하는 중...")
-            setView(progressBar)
-            setMessage("")
-            setCancelable(false)
-            setPositiveButton(R.string.positive) { dialog, which ->
-                refreshViewRequester.request(tag)
-            }
-            setNegativeButton(R.string.negative) { dialog, which ->
-                WorkManager.getInstance(context).cancelWorkById(copyWorker.id)
-                File(outputPath[0], outputPath[1]).delete()
-            }
-        }.create()
 
         WorkManager.getInstance(context)
             .getWorkInfoByIdLiveData(copyWorker.id)
             .observe(lifecycleOwner, androidx.lifecycle.Observer { workInfo: WorkInfo? ->
                 if (workInfo != null) {
-                    if (workInfo.state == WorkInfo.State.ENQUEUED) {
-                        Log.d(TAG, "WorkInfo.State.ENQUEUED")
-                    } else if (workInfo.state == WorkInfo.State.RUNNING) {
-                        Log.d(TAG, "WorkInfo.State.RUNNING")
-                        val copiedSize = workInfo.progress.getLong(COPY_PROGRESS, 0)
-                        Log.d(TAG, "progress : $copiedSize")
+                    when (workInfo.state) {
+                        WorkInfo.State.ENQUEUED -> Log.d(TAG, "WorkInfo.State.ENQUEUED")
+                        WorkInfo.State.RUNNING -> {
+                            Log.d(TAG, "WorkInfo.State.RUNNING")
+                            val copiedSize = workInfo.progress.getLong(COPY_PROGRESS, 0)
+                            Log.d(TAG, "progress : $copiedSize")
 
-                        val percentage = if (size == 0L) {
-                            0
-                        } else {
-                            (copiedSize / (size / 200)).toInt()
-                        }
-                        progressBar.setProgress(percentage, true)
+                            val percentage = if (size == 0L) {
+                                0
+                            } else {
+                                (copiedSize / (size / 200)).toInt()
+                            }
+                            progressBar.setProgress(percentage, true)
 
-                        alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(copiedSize)} / ${byteCalculation(size)}")
-                        alertDialog.show()
-                        alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
-                    } else if (workInfo.state.isFinished) {
-                        Log.d(TAG, "workInfo.state.isFinished")
-                        progressBar.setProgress(200, true)
-                        if (size == 0L) {
-                            alertDialog.setMessage("${outputPath[1]}\n${context.getString(R.string.finish_copy)}")
-                        } else {
-                            alertDialog.setMessage("${outputPath[1]}\n${byteCalculation(size)} / ${byteCalculation(size)}")
+                            alertDialog.setMessage(
+                                "${outputPath[1]}\n${byteCalculation(copiedSize)} / ${
+                                    byteCalculation(
+                                        size
+                                    )
+                                }"
+                            )
+                            alertDialog.show()
+                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.GONE
                         }
-                        alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.VISIBLE
+                        WorkInfo.State.SUCCEEDED -> {
+                            Log.d(TAG, "WorkInfo.State.SUCCEEDED")
+                            progressBar.setProgress(200, true)
+                            if (size == 0L) {
+                                alertDialog.setMessage("${outputPath[1]}\n${context.getString(R.string.finish_copy)}")
+                            } else {
+                                alertDialog.setMessage(
+                                    "${outputPath[1]}\n${byteCalculation(size)} / ${
+                                        byteCalculation(
+                                            size
+                                        )
+                                    }"
+                                )
+                            }
+                            alertDialog.getButton(Dialog.BUTTON_POSITIVE).visibility = View.VISIBLE
+                        }
                     }
                 }
             })
@@ -257,13 +278,21 @@ class FileManager(private val tag: String,
         file.renameTo(File(mCurrent, isFileExists(mCurrent, newFileName)))
     }
 
-    fun removeSingleFile(fileName: String) : Boolean{
+    fun removeSingleFile(objectType: Int, fileName: String) : Boolean{
         val file = File(mCurrent, fileName)
+        when (objectType) {
+            OBJECT_IMAGE -> getThumbnailFile(file).delete()
+        }
         return file.delete()
     }
 
     fun removeRecursively(fileName: String) : Boolean{
         val file = File(mCurrent, fileName)
+        val absolutePath = file.absolutePath
+        val path = absolutePath.substring(absolutePath.indexOf(Constants.PACKAGE_NAME) + "${Constants.PACKAGE_NAME}/files".length, absolutePath.lastIndexOf('/'))
+        val thumbnailPath = "${Constants.filesDir}/${Constants.FOLDER_THUMBNAIL}$path"
+        val thumbnailName = "${file.name}"
+        File(thumbnailPath, thumbnailName).deleteRecursively()
         return file.deleteRecursively()
     }
 

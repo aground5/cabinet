@@ -1,14 +1,13 @@
-package com.songi.cabinet
+package com.songi.cabinet.view
 
-import android.content.Context
 import android.util.Log
 import com.songi.cabinet.Constants.FILENAME_VIEW_COLUMN_CONFIG
+import com.songi.cabinet.Constants.filesDir
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
-import java.io.Writer
 
-class ViewColumnSaver(filesDir: String) {
+class ViewColumnSaver() {
     private var TAG = "ViewColumnSaver"
 
     var portraitColumns: Int = 3; set(value) {

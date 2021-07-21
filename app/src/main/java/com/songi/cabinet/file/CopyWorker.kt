@@ -28,9 +28,9 @@ class CopyWorker (context: Context, parameters: WorkerParameters) :
     val appContext = applicationContext
 
     override suspend fun doWork(): Result {
-        val inputPath: Array<String?> = inputData.keyValueMap.get("inputPath") as Array<String?>
-        val outputPath: Array<String> = inputData.keyValueMap.get("outputPath") as Array<String>
-        val size: Long = inputData.keyValueMap.get("size") as Long
+        val inputPath: Array<String?> = inputData.keyValueMap["inputPath"] as Array<String?>
+        val outputPath: Array<String> = inputData.keyValueMap["outputPath"] as Array<String>
+        val size: Long = inputData.keyValueMap["size"] as Long
 
         val inputStream = if (inputPath[0] == null) {
             appContext.contentResolver.openInputStream(Uri.parse(inputPath[1])) as FileInputStream
